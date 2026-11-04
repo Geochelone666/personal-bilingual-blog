@@ -1,0 +1,29 @@
+name = "pbb-writer"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# Publishing state machine is advanced every minute (free plan allows cron triggers).
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pbb"
+database_id = "REPLACE_WITH_D1_ID"
+migrations_dir = "migrations"
+
+[vars]
+ALLOWED_TELEGRAM_USER_IDS = "REPLACE_WITH_TELEGRAM_USER_ID"
+GITHUB_REPO = "Geochelone666/personal-bilingual-blog"
+GITHUB_BRANCH = "staging"          # test mode: Pages preview branch. Switch to "main" only after approval.
+PUBLISH_MODE = "preview"           # "preview" | "production"
+CF_ACCOUNT_ID = "REPLACE_WITH_ACCOUNT_ID"
+PAGES_PROJECT = "personal-bilingual-blog"
+SITE_URL = "https://personal-bilingual-blog.pages.dev"
+WORKER_URL = "https://pbb-writer.REPLACE.workers.dev"
+DEEPL_MIN_REMAINING = "2000"
+
+# Secrets (never committed):
+#   TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET DEEPL_API_KEY GITHUB_TOKEN
+#   CF_API_TOKEN PREVIEW_SIGNING_KEY ADMIN_TOKEN

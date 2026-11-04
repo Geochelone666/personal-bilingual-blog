@@ -1,0 +1,20 @@
+{
+  "name": "pbb-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply pbb --local",
+    "db:migrate:remote": "wrangler d1 migrations apply pbb --remote"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261104.1",
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.0",
+    "wrangler": "^4.157.0",
+    "better-sqlite3": "^11.0.0",
+    "@types/better-sqlite3": "^7.6.0"
+  }
+}

@@ -1,0 +1,19 @@
+---
+import Base from "../../../layouts/Base.astro";
+import { getCollection, render } from "astro:content";
+export async function getStaticPaths() {
+  const posts = await getCollection("posts", (p) => p.data.lang === "en");
+  return posts.map((post) => ({ params: { slug: post.data.postSlug }, props: { post } }));
+}
+const { post } = Astro.props;
+const { Content } = await render(post);
+const lang = "en";
+const other = lang === "zh" ? "en" : "zh";
+---
+<Base lang={lang} title={post.data.title} versionHash={post.data.versionHash} alternate={`/${other}/posts/${post.data.postSlug}/`}>
+  <article>
+    <h1>{post.data.title}</h1>
+    <p class="meta">{post.data.date.toISOString().slice(0, 10)}{post.data.updated && ` · ${lang === "zh" ? "更新于" : "updated"} ${post.data.updated.toISOString().slice(0, 10)}`}{lang === "en" && " · Translated from Chinese"}</p>
+    <Content />
+  </article>
+</Base>
