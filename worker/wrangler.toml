@@ -14,7 +14,7 @@ database_id = "REPLACE_WITH_D1_ID"
 migrations_dir = "migrations"
 
 [vars]
-ALLOWED_TELEGRAM_USER_IDS = "REPLACE_WITH_TELEGRAM_USER_ID"
+ALLOWED_TELEGRAM_USER_IDS = "7704621098"
 GITHUB_REPO = "Geochelone666/personal-bilingual-blog"
 GITHUB_BRANCH = "staging"          # test mode: Pages preview branch. Switch to "main" only after approval.
 PUBLISH_MODE = "preview"           # "preview" | "production"
