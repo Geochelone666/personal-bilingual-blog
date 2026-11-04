@@ -39,7 +39,7 @@ export interface Version {
 
 export class Service {
   tg: Telegram;
-  constructor(public env: Env, public fetcher: typeof fetch = fetch) {
+  constructor(public env: Env, public fetcher: typeof fetch = ((i: any, o?: any) => fetch(i, o)) as typeof fetch) {
     this.tg = new Telegram(env.TELEGRAM_BOT_TOKEN, fetcher);
   }
 

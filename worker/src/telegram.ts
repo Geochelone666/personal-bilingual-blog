@@ -1,5 +1,5 @@
 export class Telegram {
-  constructor(private token: string, private fetcher: typeof fetch = fetch) {}
+  constructor(private token: string, private fetcher: typeof fetch = ((i: any, o?: any) => fetch(i, o)) as typeof fetch) {}
 
   async call(method: string, payload: Record<string, unknown>): Promise<any> {
     const r = await this.fetcher(`https://api.telegram.org/bot${this.token}/${method}`, {

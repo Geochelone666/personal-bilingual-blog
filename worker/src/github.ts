@@ -2,7 +2,7 @@
 const API = "https://api.github.com";
 
 export class GitHub {
-  constructor(private token: string, private repo: string, private fetcher: typeof fetch = fetch) {}
+  constructor(private token: string, private repo: string, private fetcher: typeof fetch = ((i: any, o?: any) => fetch(i, o)) as typeof fetch) {}
 
   private async call(path: string, init: RequestInit = {}): Promise<any> {
     const r = await this.fetcher(`${API}/repos/${this.repo}${path}`, {
