@@ -10,7 +10,7 @@ crons = ["* * * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "pbb"
-database_id = "REPLACE_WITH_D1_ID"
+database_id = "12f69985-d737-4f23-b17c-401ef58665d6"
 migrations_dir = "migrations"
 
 [vars]
@@ -18,10 +18,10 @@ ALLOWED_TELEGRAM_USER_IDS = "7704621098"
 GITHUB_REPO = "Geochelone666/personal-bilingual-blog"
 GITHUB_BRANCH = "staging"          # test mode: Pages preview branch. Switch to "main" only after approval.
 PUBLISH_MODE = "preview"           # "preview" | "production"
-CF_ACCOUNT_ID = "REPLACE_WITH_ACCOUNT_ID"
+CF_ACCOUNT_ID = "fd879cce8bb27887c8539b8aef1fb741"
 PAGES_PROJECT = "personal-bilingual-blog"
 SITE_URL = "https://personal-bilingual-blog.pages.dev"
-WORKER_URL = "https://pbb-writer.REPLACE.workers.dev"
+WORKER_URL = "https://pbb-writer.geochelone666.workers.dev"
 DEEPL_MIN_REMAINING = "2000"
 
 # Secrets (never committed):

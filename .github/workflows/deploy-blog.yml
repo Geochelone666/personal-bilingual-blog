@@ -1,0 +1,33 @@
+name: Deploy blog to Cloudflare Pages
+on:
+  push:
+    branches: [main, staging]
+  workflow_dispatch:
+concurrency:
+  group: pages-${{ github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: blog/package-lock.json
+      - name: Build
+        working-directory: blog
+        env:
+          CF_PAGES_BRANCH: ${{ github.ref_name }}
+        run: |
+          npm ci
+          npm run build
+      - name: Deploy (branch ${{ github.ref_name }}, commit ${{ github.sha }})
+        working-directory: blog
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: fd879cce8bb27887c8539b8aef1fb741
+        run: npx -y wrangler@4 pages deploy dist --project-name=personal-bilingual-blog --branch=${{ github.ref_name }} --commit-hash=${{ github.sha }} --commit-dirty=false
