@@ -13,6 +13,7 @@ import { Kind, Category, classify, recommend, defaultTargets, buildDrafts, draft
 import { publishTelegram, publishBluesky, publishDevto, AuthError } from "./publishers";
 
 const ENGINE = "deepl-free-v2";
+const LEASE_MS = 90_000;
 const MAX_JOB_ATTEMPTS = 12;
 const PREVIEW_TTL_S = 7 * 24 * 3600;
 
@@ -54,24 +55,14 @@ export class Service {
   }
 
   // ---------- data access ----------
-  get auto(): boolean {
-    return this.env.AUTO_PUBLISH === "true";
-  }
-  /** Progress chatter; silent in auto mode. */
-  private async say(chatId: number, text: string, always = false) {
-    if (always) await this.tg.send(chatId, text);
+  private async say(chatId: number, text: string) {
+    await this.tg.send(chatId, text);
   }
   private async titleOf(articleId: string): Promise<string> {
     const r = await this.db().prepare("SELECT v.title_zh t FROM articles a JOIN versions v ON v.id=a.current_version_id WHERE a.id=?").bind(articleId).first<any>();
     return r?.t ?? articleId;
   }
-  /** The one short failure note the user sees in auto mode. */
-  private async failNote(chatId: number, articleId: string, what: string) {
-    const lines = enabledPlatforms(this.env).map((p) => `${PLATFORM_LABEL[p] ?? p}：未成功`).join("\n");
-    await this.tg.sendHtml(chatId, `❌ 《${esc(await this.titleOf(articleId))}》未发布\n${lines}\n<i>${esc(what.slice(0, 200))}</i>`);
-  }
-
-  /** Auto mode: one receipt per approval, once every platform job has finished. */
+  /** One receipt per approval, once every platform job has finished. */
   async maybeReceipt(approvalId: string) {
     const jobs = (await this.db().prepare("SELECT * FROM publish_jobs WHERE approval_id=?").bind(approvalId).all<any>()).results ?? [];
     if (!jobs.length || jobs.some((j) => j.status === "active" && j.stage !== "external")) return;
@@ -196,19 +187,28 @@ export class Service {
   }
 
   // ---------- drafts & versions ----------
-  async createArticle(userId: number, chatId: number, titleZh: string, bodyZh: string, kind: Kind = "article"): Promise<string> {
+  async createArticle(userId: number, chatId: number, titleZh: string, bodyZh: string, kind: Kind = "article", sourceUpdate: number | null = null): Promise<string> {
     const now = nowIso();
+    if (sourceUpdate != null) {
+      // Replaying a Telegram update must never create a second article.
+      const dup = await this.db().prepare("SELECT id, status, current_version_id FROM articles WHERE source_update=?").bind(sourceUpdate).first<any>();
+      if (dup) {
+        // Resume where the interrupted run stopped (it was saved, but translation never finished).
+        if (dup.current_version_id && ["draft", "translation_failed"].includes(dup.status)) await this.translateAndReview(dup.current_version_id, chatId);
+        return dup.id;
+      }
+    }
     const id = randomId("a");
     const zhHash = await sha256Hex(zhHashInput(titleZh, bodyZh));
     const slug = makeSlug(null, zhHash);
     const category = classify(titleZh, bodyZh).category;
     await this.db()
-      .prepare("INSERT INTO articles (id, slug, status, created_by, created_at, updated_at, kind, category) VALUES (?,?,?,?,?,?,?,?)")
-      .bind(id, slug, "draft", userId, now, now, kind, category)
+      .prepare("INSERT INTO articles (id, slug, status, created_by, created_at, updated_at, kind, category, source_update) VALUES (?,?,?,?,?,?,?,?,?)")
+      .bind(id, slug, "draft", userId, now, now, kind, category, sourceUpdate)
       .run();
     const vid = await this.insertVersion(id, titleZh, normalizeBody(bodyZh), zhHash, null);
     // The Chinese original is saved before anything else can fail.
-    await this.say(chatId, `中文原稿已保存 ✅（${kind === "quick" ? "短想法" : "文章"} ${id} v1）\n正在翻译英文…`, !this.auto);
+    await this.say(chatId, `中文原稿已保存 ✅（${kind === "quick" ? "短想法" : "文章"} ${id} v1）\n正在翻译英文…`);
     await this.translateAndReview(vid, chatId);
     return id;
   }
@@ -313,11 +313,9 @@ export class Service {
       await this.maybeRefreshSlug(v.article_id, title, v.zh_hash);
       if (this.env.PROOFREAD === "true") {
         // Hark proofreads the English, then flips the article back to in_review;
-        // the cron sweep then sends the review card (or auto-approves in auto mode).
+        // the cron sweep then sends the review card.
         await this.db().prepare("UPDATE articles SET status='awaiting_proofread', updated_at=? WHERE id=?").bind(nowIso(), v.article_id).run();
-        await this.say(chatId, this.auto ? `英文已译好，等待校对后自动发布（${v.article_id}）。` : `英文已译好，校对后（最多约 30 分钟）把审核卡发给你。`, true);
-      } else if (this.auto) {
-        if (await this.autoApprove(versionId, chatId)) await this.processDueJobs();
+        await this.say(chatId, `英文已译好，校对后（最多约 30 分钟）把审核卡发给你。`);
       } else await this.sendReview(versionId, chatId);
     } catch (e: any) {
       const paused = e instanceof QuotaError || e instanceof KeyTypeError;
@@ -327,7 +325,6 @@ export class Service {
           .bind(paused ? "paused_quota" : "failed", String(e?.message ?? e), versionId),
         this.db().prepare("UPDATE articles SET status=?, updated_at=? WHERE id=?").bind(paused ? "translation_paused" : "translation_failed", nowIso(), v.article_id),
       ]);
-      if (this.auto) return this.failNote(chatId, v.article_id, `翻译${paused ? "额度不足" : "失败"}：${e?.message ?? e}`);
       await this.tg.send(
         chatId,
         `${paused ? "⏸ 翻译已暂停" : "⚠️ 翻译失败"}：${e?.message ?? e}\n中文原稿已安全保存（${v.article_id}）。\n` +
@@ -475,21 +472,6 @@ export class Service {
     if (a.current_version_id && a.status === "in_review") await this.sendReview(a.current_version_id, chatId);
   }
 
-  /** Auto mode: the user's own message is the approval (asked for 2026-11-04). */
-  async autoApprove(versionId: string, chatId: number): Promise<boolean> {
-    const v = await this.version(versionId);
-    const a = v ? await this.article(v.article_id) : null;
-    if (!v || !a || !v.en_hash) return false;
-    const st = await this.reviewState(a.id);
-    if (!st) return false;
-    const res = await this.approve(Number(a.created_by), chatId, v.id, st.hash.slice(0, 16));
-    if (res !== "已批准") {
-      await this.failNote(chatId, a.id, res);
-      return false;
-    }
-    return true;
-  }
-
   // ---------- approval ----------
   async approve(userId: number, chatId: number, versionId: string, hashPrefix: string): Promise<string> {
     const v = await this.version(versionId);
@@ -501,7 +483,7 @@ export class Service {
     const platforms = st?.targets ?? [];
     if (st) {
       const existing = await this.db().prepare("SELECT id FROM approvals WHERE approval_hash=?").bind(st.hash).first();
-      if (existing && st.hash.startsWith(hashPrefix)) return "这个版本已经批准过，正在发布或已发布，不会重复发布";
+      if (existing && /^[0-9a-f]{16}$/.test(hashPrefix) && st.hash.startsWith(hashPrefix)) return "这个版本已经批准过，正在发布或已发布，不会重复发布";
     }
 
     const res = await checkApproval({
@@ -532,7 +514,7 @@ export class Service {
       );
     }
     await this.db().batch(stmts);
-    await this.say(chatId, `已批准 ${a.id} v${v.version_no}：${platforms.map((p) => LABEL[p] ?? p).join("、")}。完成后发回执。`, !this.auto);
+    await this.say(chatId, `已批准 ${a.id} v${v.version_no}：${platforms.map((p) => LABEL[p] ?? p).join("、")}。完成后发回执。`);
     return "已批准";
   }
 
@@ -544,11 +526,20 @@ export class Service {
       .bind(now, limit)
       .all<any>();
     for (const job of r.results ?? []) {
+      // Lease: only one invocation (cron, webhook) may work on a job at a time.
+      const lease = await this.db()
+        .prepare("UPDATE publish_jobs SET lease_until=? WHERE id=? AND status='active' AND (lease_until IS NULL OR lease_until<=?)")
+        .bind(new Date(Date.now() + LEASE_MS).toISOString(), job.id, nowIso())
+        .run();
+      if (!lease.meta.changes) continue;
       try {
+        if (await this.supersededOrBlocked(job)) continue;
         await this.advanceJob(job);
       } catch (e: any) {
         const timeout = e?.name === "TimeoutError" || e?.name === "AbortError";
         await this.jobError(job, timeout ? "请求超时（下次重试前会先核查远端状态）" : String(e?.message ?? e), e instanceof AuthError);
+      } finally {
+        await this.db().prepare("UPDATE publish_jobs SET lease_until=NULL WHERE id=?").bind(job.id).run();
       }
     }
   }
@@ -574,6 +565,34 @@ export class Service {
 
   private async wait(job: any, seconds: number, note: string) {
     await this.db().prepare("UPDATE publish_jobs SET next_attempt_at=?, last_error=?, updated_at=? WHERE id=?").bind(addSeconds(nowIso(), seconds), note, nowIso(), job.id).run();
+  }
+
+  /**
+   * Jobs for the same article and platform run strictly in approval order.
+   * An older job that has not touched the remote side yet is dropped when a newer approval exists;
+   * a newer job waits while an older one is still in flight.
+   */
+  async supersededOrBlocked(job: any): Promise<boolean> {
+    const newer = await this.db()
+      .prepare("SELECT id FROM publish_jobs WHERE article_id=? AND platform=? AND created_at>? AND status IN ('active','done') LIMIT 1")
+      .bind(job.article_id, job.platform, job.created_at)
+      .first<any>();
+    const untouched = job.stage === "queued" && !job.deployment_id && !job.commit_sha;
+    if (newer && untouched) {
+      await this.db().prepare("UPDATE publish_jobs SET status='cancelled', last_error='已被更新的批准取代', updated_at=? WHERE id=?").bind(nowIso(), job.id).run();
+      await this.event(job.id, "superseded", true, { by: newer.id });
+      await this.maybeReceipt(job.approval_id);
+      return true;
+    }
+    const older = await this.db()
+      .prepare("SELECT id FROM publish_jobs WHERE article_id=? AND platform=? AND created_at<? AND status='active' LIMIT 1")
+      .bind(job.article_id, job.platform, job.created_at)
+      .first<any>();
+    if (older) {
+      await this.db().prepare("UPDATE publish_jobs SET next_attempt_at=?, updated_at=? WHERE id=?").bind(new Date(Date.now() + 30_000).toISOString(), nowIso(), job.id).run();
+      return true;
+    }
+    return false;
   }
 
   async advanceJob(job: any) {
@@ -669,8 +688,10 @@ export class Service {
 
   async retry(articleId: string): Promise<string> {
     const r = await this.db()
-      .prepare("UPDATE publish_jobs SET status='active', attempts=0, next_attempt_at=?, updated_at=? WHERE article_id=? AND status='failed'")
-      .bind(nowIso(), nowIso(), articleId)
+      .prepare(
+        "UPDATE publish_jobs SET status='active', attempts=0, next_attempt_at=?, updated_at=? WHERE article_id=? AND status='failed' AND approval_id=(SELECT id FROM approvals WHERE article_id=? AND invalidated_at IS NULL ORDER BY approved_at DESC LIMIT 1)",
+      )
+      .bind(nowIso(), nowIso(), articleId, articleId)
       .run();
     if (!r.meta.changes) return "没有可重试的失败任务";
     await this.db().prepare("UPDATE articles SET status='publishing', updated_at=? WHERE id=?").bind(nowIso(), articleId).run();
@@ -692,6 +713,61 @@ export class Service {
     const u = await deeplUsage(this.env.DEEPL_API_KEY, this.fetcher);
     const used = await this.db().prepare("SELECT COALESCE(SUM(chars),0) AS n FROM usage_log WHERE provider='deepl'").first<{ n: number }>();
     return `DeepL（免费 :fx 密钥）：已用 ${u.character_count.toLocaleString()} / ${u.character_limit.toLocaleString()} 字符，剩余 ${(u.character_limit - u.character_count).toLocaleString()}\n本系统累计记录消耗：${used?.n ?? 0} 字符\n注意：新开通的 Developer 方案是一次性额度，用完不会重置。额度不足时自动暂停翻译，不会切换付费。`;
+  }
+
+  // ---------- Medium: manual takeover ----------
+  /** Latest Medium job for an article that is waiting on the browser import (or failed). */
+  private async mediumJob(articleId: string) {
+    return this.db()
+      .prepare("SELECT * FROM publish_jobs WHERE article_id=? AND platform='medium' AND status IN ('active','failed') ORDER BY created_at DESC LIMIT 1")
+      .bind(articleId)
+      .first<any>();
+  }
+  /** `/medium <id> <url>`: the user published by hand; record it. `/medium <id> skip`: give up on Medium for this approval. */
+  async mediumTakeover(articleId: string, arg: string): Promise<string> {
+    const job = await this.mediumJob(articleId);
+    if (!job) return "这篇文章没有等待中的 Medium 任务";
+    if (/^(skip|跳过|取消)$/i.test(arg)) {
+      await this.db().prepare("UPDATE publish_jobs SET status='cancelled', last_error='用户放弃 Medium', updated_at=? WHERE id=?").bind(nowIso(), job.id).run();
+      await this.event(job.id, "medium_skip", true, null);
+      await this.maybeReceipt(job.approval_id);
+      return "已放弃本次 Medium 发布";
+    }
+    let u: URL;
+    try { u = new URL(arg); } catch { return "用法：/medium <编号> <Medium 文章链接>，或 /medium <编号> skip"; }
+    if (u.protocol !== "https:" || !/(^|\.)medium\.com$/.test(u.hostname) || u.pathname.length < 3 || /\/(p\/[^/]+\/edit|new-story)/.test(u.pathname)) return "请给已发布的 medium.com 文章链接（不是编辑页）";
+    const clean = `${u.origin}${u.pathname}`;
+    const dup = await this.db().prepare("SELECT article_id FROM publish_jobs WHERE platform='medium' AND status='done' AND public_urls LIKE ? AND article_id!=?").bind(`%${clean}%`, articleId).first<any>();
+    if (dup) return `这个链接已登记在另一篇文章（${dup.article_id}）`;
+    await this.db().prepare("UPDATE publish_jobs SET status='done', stage='verified', public_urls=?, remote_id=?, last_error=NULL, updated_at=? WHERE id=?").bind(JSON.stringify([clean]), JSON.stringify({ url: clean, by: "manual" }), nowIso(), job.id).run();
+    await this.event(job.id, "medium_manual", true, { url: clean });
+    await this.maybeReceipt(job.approval_id);
+    return `已登记 Medium：${clean}`;
+  }
+  /** Instructions for doing the Medium step by hand (sent when the browser import is stuck). */
+  async mediumHandoff(job: any): Promise<string> {
+    const ap = await this.db().prepare("SELECT drafts_json FROM approvals WHERE id=?").bind(job.approval_id).first<any>();
+    const d = ap?.drafts_json ? JSON.parse(ap.drafts_json).medium : null;
+    return `Medium 自动导入超过 24 小时未完成（${job.article_id}）。\n可手动：打开 https://medium.com/p/import 导入\n${d?.source ?? "(无来源链接)"}\n发布后发：/medium ${job.article_id} <文章链接>\n不发了：/medium ${job.article_id} skip`;
+  }
+
+  // ---------- health ----------
+  /** Problems an operator should know about. Each has a stable key so alerts fire once. */
+  async health(now = Date.now()): Promise<Array<{ key: string; text: string; job?: any }>> {
+    const iso = (ms: number) => new Date(now - ms).toISOString();
+    const out: Array<{ key: string; text: string; job?: any }> = [];
+    const q = async (sql: string, ...b: any[]) => ((await this.db().prepare(sql).bind(...b).all<any>()).results ?? []);
+    for (const j of await q("SELECT * FROM publish_jobs WHERE status='failed' AND updated_at>=?", iso(7 * 86400_000)))
+      out.push({ key: `failed:${j.id}`, text: `${PLATFORM_LABEL[j.platform] ?? j.platform} 发布失败（${j.article_id}）：${String(j.last_error ?? "").slice(0, 100)}。/retry ${j.article_id}` });
+    for (const j of await q("SELECT * FROM publish_jobs WHERE status='active' AND stage!='external' AND created_at<=?", iso(2 * 3600_000)))
+      out.push({ key: `stuck:${j.id}`, text: `${PLATFORM_LABEL[j.platform] ?? j.platform} 任务超过 2 小时未完成（${j.article_id}，阶段 ${j.stage}，已试 ${j.attempts} 次）` });
+    for (const j of await q("SELECT * FROM publish_jobs WHERE status='active' AND stage='external' AND updated_at<=?", iso(24 * 3600_000)))
+      out.push({ key: `medium:${j.id}`, text: await this.mediumHandoff(j), job: j });
+    for (const a of await q("SELECT id FROM articles WHERE status='awaiting_proofread' AND updated_at<=?", iso(2 * 3600_000)))
+      out.push({ key: `proofread:${a.id}`, text: `英文校对超过 2 小时未完成（${a.id}），校对任务可能停了` });
+    for (const u of await q("SELECT update_id FROM seen_updates WHERE status='failed' AND at>=?", iso(7 * 86400_000)))
+      out.push({ key: `update:${u.update_id}`, text: `有一条 Telegram 消息处理中断且无法自动恢复（update ${u.update_id}），请重发` });
+    return out;
   }
 
   async downloadTgFile(fileId: string): Promise<Uint8Array> {

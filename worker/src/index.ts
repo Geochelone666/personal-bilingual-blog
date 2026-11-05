@@ -6,6 +6,8 @@ import { renderPreviewHtml } from "./render";
 import { deeplUsage } from "./deepl";
 import { userTitle, generateTitle, heuristicTitle } from "./autotitle";
 import { detectKind } from "./p4";
+import { reconcile } from "./reconcile";
+import { once } from "./p3";
 import { sha256Bytes } from "./service";
 import { enabledPlatforms } from "./platforms";
 
@@ -17,6 +19,8 @@ const HELP = `个人双语博客 · 写作 Bot
 · 开头写 #想法 或 #文章 可强制类型
 长文可分多条发，或 /new … /done，也可发 .md / .txt 文件。
 替换封面：发图片并配文 /cover <编号>；/cover <编号> 默认 恢复自动封面
+Medium 手动接管：/medium <编号> <链接> 或 /medium <编号> skip
+/health 系统巡检
 
 /list 最近文章
 /status <编号> 查看状态和发布回执
@@ -50,9 +54,11 @@ export default {
 
   async scheduled(_ev: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil((async () => {
-      await autoHousekeeping(env);
+      await recoverUpdates(env).catch((e) => console.error("recover", e));
+      await housekeeping(env);
       await new Service(env).processDueJobs();
       await weekly(env).catch((e) => console.error("weekly", e));
+      if (new Date().getUTCMinutes() % 15 === 0) await monitor(env).catch((e) => console.error("monitor", e));
     })());
   },
 };
@@ -63,23 +69,89 @@ async function webhook(req: Request, env: Env, ctx: ExecutionContext): Promise<R
   if (!env.TELEGRAM_WEBHOOK_SECRET || !safeEqual(secret, env.TELEGRAM_WEBHOOK_SECRET)) return new Response("forbidden", { status: 403 });
   const update: any = await req.json();
 
-  // Telegram may redeliver; process each update_id once.
-  const ins = await env.DB.prepare("INSERT OR IGNORE INTO seen_updates (update_id, at) VALUES (?,?)").bind(update.update_id, nowIso()).run();
-  if (!ins.meta.changes) return new Response("dup");
+  if (typeof update?.update_id !== "number") return new Response("bad update", { status: 400 });
 
   const from = update.message?.from ?? update.callback_query?.from;
   const chatType = update.message?.chat?.type ?? update.callback_query?.message?.chat?.type;
-  // Only allow-listed users, only in private chat. Others are ignored silently.
+  // Only allow-listed users, only in private chat. Others are ignored silently (and not stored).
   if (!from || !allowedUsers(env).has(Number(from.id)) || chatType !== "private") return new Response("ignored");
 
-  ctx.waitUntil(
-    handleUpdate(update, env).catch(async (e) => {
-      console.error(e);
-      const chatId = update.message?.chat?.id ?? update.callback_query?.message?.chat?.id;
-      if (chatId) await new Service(env).tg.send(chatId, `⚠️ 处理出错：${e?.message ?? e}`).catch(() => {});
-    }),
-  );
+  // Telegram may redeliver; claim each update_id once. The payload is kept until processing finishes,
+  // so the cron can recover an update whose worker died mid-way.
+  const ins = await env.DB.prepare("INSERT OR IGNORE INTO seen_updates (update_id, at, status, payload, attempts) VALUES (?,?,'pending',?,1)").bind(update.update_id, nowIso(), JSON.stringify(update)).run();
+  if (!ins.meta.changes) return new Response("dup");
+
+  ctx.waitUntil(runUpdate(update, env));
   return new Response("ok");
+}
+
+/** Process one update and record the outcome. Errors are reported once and never lose the original text. */
+async function runUpdate(update: any, env: Env) {
+  try {
+    await handleUpdate(update, env);
+    await env.DB.prepare("UPDATE seen_updates SET status='done', payload=NULL WHERE update_id=?").bind(update.update_id).run();
+  } catch (e: any) {
+    console.error(e);
+    // Keep the payload as 'pending' so the cron retries text posts; tell the user once.
+    const chatId = update.message?.chat?.id ?? update.callback_query?.message?.chat?.id;
+    if (chatId) await new Service(env).tg.send(chatId, `⚠️ 处理出错：${e?.message ?? e}\n稍后会自动重试一次；你发的原文不会丢。`).catch(() => {});
+  }
+}
+
+const REPLAY_AFTER_MS = 120_000;
+const MAX_REPLAYS = 3;
+/** Recover updates that never finished. Only new text posts are replayed (they are idempotent via source_update). */
+export async function recoverUpdates(env: Env, now = Date.now()) {
+  const due = await env.DB.prepare("SELECT * FROM seen_updates WHERE status='pending' AND at<=? ORDER BY update_id LIMIT 5").bind(new Date(now - REPLAY_AFTER_MS).toISOString()).all<any>();
+  for (const row of due.results ?? []) {
+    const update = row.payload ? JSON.parse(row.payload) : null;
+    const text: string = update?.message?.text ?? "";
+    const userId = update?.message?.from?.id;
+    const st = userId ? await env.DB.prepare("SELECT mode FROM chat_state WHERE user_id=?").bind(userId).first<any>() : null;
+    const replayable = !!update?.message && !!text && !text.startsWith("/") && !["collect_new"].includes(st?.mode ?? "idle");
+    if (!replayable || row.attempts >= MAX_REPLAYS) {
+      await env.DB.prepare("UPDATE seen_updates SET status='failed' WHERE update_id=?").bind(row.update_id).run();
+      continue;
+    }
+    const claim = await env.DB.prepare("UPDATE seen_updates SET attempts=attempts+1, at=? WHERE update_id=? AND status='pending' AND attempts=?").bind(new Date(now).toISOString(), row.update_id, row.attempts).run();
+    if (claim.meta.changes) await runUpdate(update, env);
+  }
+  // Keep the de-dup table small: payloads are already gone; drop rows older than 30 days.
+  await env.DB.prepare("DELETE FROM seen_updates WHERE status!='pending' AND at<?").bind(new Date(now - 30 * 86400_000).toISOString()).run();
+}
+
+/** Alert the owner once per problem; problems clear themselves when fixed. */
+export async function monitor(env: Env, now = Date.now()) {
+  const owner = [...allowedUsers(env)][0];
+  if (!owner) return;
+  const svc = new Service(env);
+  const issues = await svc.health(now);
+  // Once a day, check remote copies against our records (read-only).
+  const day = new Date(now).toISOString().slice(0, 10);
+  await once(env, "reconcile", day, async () => {
+    const r = await reconcile(env);
+    await env.DB.prepare("INSERT INTO periodic_runs (name, last_key, at) VALUES ('reconcile_result', ?, ?) ON CONFLICT(name) DO UPDATE SET last_key=excluded.last_key, at=excluded.at").bind(JSON.stringify(r.problems), new Date(now).toISOString()).run();
+  }).catch((e) => console.error("reconcile", e));
+  // Once a day, check credentials and the free DeepL quota so a broken key is found before a publish needs it.
+  await once(env, "credcheck", day, async () => {
+    const found: Array<{ key: string; text: string }> = [];
+    const chk = async (name: string, fn: () => Promise<void>) => { try { await fn(); } catch (e: any) { found.push({ key: `cred:${name}:${day}`, text: `${name} 凭据或服务检查失败：${String(e?.message ?? e).slice(0, 80)}` }); } };
+    await chk("Telegram Bot", async () => { await svc.tg.call("getMe", {}); });
+    await chk("DeepL", async () => { const u = await deeplUsage(env.DEEPL_API_KEY); if (u.character_limit - u.character_count < u.character_limit * 0.1) throw new Error(`免费额度剩余不足 10%（${u.character_limit - u.character_count} 字符）`); });
+    if (env.DEVTO_API_KEY) await chk("dev.to", async () => { const r = await fetch("https://dev.to/api/users/me", { headers: { "api-key": env.DEVTO_API_KEY!, "User-Agent": "pbb-writer" } }); if (!r.ok) throw new Error(`HTTP ${r.status}`); });
+    if (env.BLUESKY_APP_PASSWORD) await chk("Bluesky", async () => { const r = await fetch("https://bsky.social/xrpc/com.atproto.server.createSession", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ identifier: env.BLUESKY_HANDLE, password: env.BLUESKY_APP_PASSWORD }) }); if (!r.ok) throw new Error(`HTTP ${r.status}`); });
+    await chk("GitHub", async () => { const r = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}`, { headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, "User-Agent": "pbb-writer" } }); if (!r.ok) throw new Error(`HTTP ${r.status}`); const j: any = await r.json(); if (!j.permissions?.push) throw new Error("没有推送权限"); });
+    await env.DB.prepare("INSERT INTO periodic_runs (name, last_key, at) VALUES ('credcheck_result', ?, ?) ON CONFLICT(name) DO UPDATE SET last_key=excluded.last_key, at=excluded.at").bind(JSON.stringify(found), new Date(now).toISOString()).run();
+  }).catch((e) => console.error("credcheck", e));
+  const cred = await env.DB.prepare("SELECT last_key FROM periodic_runs WHERE name='credcheck_result'").first<any>();
+  if (cred?.last_key) for (const p of JSON.parse(cred.last_key)) issues.push(p);
+  const rec = await env.DB.prepare("SELECT last_key FROM periodic_runs WHERE name='reconcile_result'").first<any>();
+  if (rec?.last_key) for (const p of JSON.parse(rec.last_key)) issues.push(p);
+  for (const i of issues) {
+    const ins = await env.DB.prepare("INSERT OR IGNORE INTO periodic_runs (name, last_key, at) VALUES (?,?,?)").bind(`alert:${i.key}`, "sent", new Date(now).toISOString()).run();
+    if (ins.meta.changes) await svc.tg.send(owner, `🔧 ${i.text}`).catch(async () => { await env.DB.prepare("DELETE FROM periodic_runs WHERE name=?").bind(`alert:${i.key}`).run(); });
+  }
+  await env.DB.prepare("INSERT INTO periodic_runs (name, last_key, at) VALUES ('heartbeat', 'cron', ?) ON CONFLICT(name) DO UPDATE SET at=excluded.at").bind(new Date(now).toISOString()).run();
 }
 
 async function setState(env: Env, userId: number, mode: string, articleId: string | null = null, buffer: string | null = null) {
@@ -152,10 +224,7 @@ async function handleUpdate(update: any, env: Env) {
   if (!text) return svc.tg.send(chatId, "目前只接受文字或 .md/.txt 文件");
 
   if (!text.startsWith("/") && !["edit_zh", "edit_en", "collect_new"].includes(mode)) {
-    return autoPost(env, svc, userId, chatId, text, state);
-  }
-  if (env.AUTO_PUBLISH === "true" && (text.trim() === "/start" || text.trim() === "/help")) {
-    return svc.tg.send(chatId, "直接发文字就行，我会翻译成中英双语并发布。\n第一行想写标题就写（短短一行），不写我来起。\n发布后告诉你发到了哪里。");
+    return postOrHold(env, svc, userId, chatId, text, state, update.update_id);
   }
 
   if (text.startsWith("/")) {
@@ -191,6 +260,16 @@ async function handleUpdate(update: any, env: Env) {
         if (!arg || !(await svc.article(arg))) return svc.tg.send(chatId, `用法：${cmd} <编号>`);
         await setState(env, userId, cmd === "/edit" ? "edit_zh" : "edit_en", arg);
         return svc.tg.send(chatId, cmd === "/edit" ? "请发送完整的新中文稿（第一行标题）。/cancel 取消" : "请发送完整的英文稿（第一行标题）。/cancel 取消");
+      }
+      case "/medium": {
+        const [id, ...more] = arg.split(/\s+/);
+        if (!id || !more.length) return svc.tg.send(chatId, "Medium 手动接管：发布后发 /medium <编号> <文章链接>；不发了：/medium <编号> skip");
+        return svc.tg.send(chatId, await svc.mediumTakeover(id, more.join(" ")));
+      }
+      case "/health": {
+        const issues = await svc.health();
+        const hb = await env.DB.prepare("SELECT at FROM periodic_runs WHERE name='heartbeat'").first<any>();
+        return svc.tg.send(chatId, `${issues.length ? issues.map((i) => `· ${i.text}`).join("\n") : "一切正常"}\n上次巡检：${hb?.at ?? "无"}`);
       }
       case "/cover": {
         const [id, opt] = arg.split(/\s+/);
@@ -243,7 +322,7 @@ async function handleUpdate(update: any, env: Env) {
 const SPLIT_AT = 3900;
 const HOLD_SECONDS = 25;
 
-async function autoPost(env: Env, svc: Service, userId: number, chatId: number, text: string, state: any) {
+async function postOrHold(env: Env, svc: Service, userId: number, chatId: number, text: string, state: any, updateId: number | null) {
   const held = state?.mode === "auto_hold" ? (state.buffer ?? "") : "";
   const joined = held ? `${held}${text}` : text;
   if (text.length >= SPLIT_AT && joined.length < 200_000) {
@@ -251,32 +330,32 @@ async function autoPost(env: Env, svc: Service, userId: number, chatId: number, 
     return;
   }
   if (held) await setState(env, userId, "idle");
-  await publishText(env, svc, userId, chatId, joined);
+  await createDraft(env, svc, userId, chatId, joined, updateId);
 }
 
-async function publishText(env: Env, svc: Service, userId: number, chatId: number, raw: string) {
+/** Creates a draft for review. Nothing is published until the user approves the review card. */
+async function createDraft(env: Env, svc: Service, userId: number, chatId: number, raw: string, updateId: number | null) {
   const { kind, text } = detectKind(raw);
-  if (kind === "quick") return void (await svc.createArticle(userId, chatId, heuristicTitle(text), text.trim(), "quick"));
+  if (kind === "quick") return void (await svc.createArticle(userId, chatId, heuristicTitle(text), text.trim(), "quick", updateId));
   const own = userTitle(text);
   const title = own?.title ?? (await generateTitle(env.AI, text));
   const body = own?.body ?? text.trim();
-  await svc.createArticle(userId, chatId, title, body, "article");
+  await svc.createArticle(userId, chatId, title, body, "article", updateId);
 }
 
-async function autoHousekeeping(env: Env) {
+async function housekeeping(env: Env) {
   const svc = new Service(env);
   // Flush long messages whose follow-up part never came.
   const cutoff = new Date(Date.now() - HOLD_SECONDS * 1000).toISOString();
   const held = await env.DB.prepare("SELECT * FROM chat_state WHERE mode='auto_hold' AND updated_at<=?").bind(cutoff).all<any>();
   for (const st of held.results ?? []) {
     await setState(env, st.user_id, "idle");
-    await publishText(env, svc, st.user_id, Number(st.article_id), st.buffer ?? "").catch((e) => console.error(e));
+    await createDraft(env, svc, st.user_id, Number(st.article_id), st.buffer ?? "", null).catch((e) => console.error(e));
   }
-  // Drafts that finished translating but whose auto-approval was cut off.
+  // Drafts whose review card was never delivered (proofread finished, or a send failed).
   const stuck = await env.DB.prepare("SELECT a.id, a.created_by, a.current_version_id, a.review_sent_for FROM articles a JOIN versions v ON v.id=a.current_version_id WHERE a.status='in_review' AND v.translation_status='done' AND a.updated_at<=?").bind(new Date(Date.now() - 120_000).toISOString()).all<any>();
   for (const a of stuck.results ?? []) {
-    if (env.AUTO_PUBLISH === "true") await svc.autoApprove(a.current_version_id, a.created_by).catch((e) => console.error(e));
-    else if (!String(a.review_sent_for ?? "").startsWith(`${a.current_version_id}|`)) await svc.sendReview(a.current_version_id, a.created_by).catch((e) => console.error(e));
+    if (!String(a.review_sent_for ?? "").startsWith(`${a.current_version_id}|`)) await svc.sendReview(a.current_version_id, a.created_by).catch((e) => console.error(e));
   }
 }
 
@@ -345,6 +424,8 @@ async function admin(req: Request, url: URL, env: Env): Promise<Response> {
   }
 
   if (url.pathname === "/admin/backup-preview") return new Response(await buildBackup(env), { headers: { "Content-Type": "application/json" } });
+  if (url.pathname === "/admin/reconcile") return json(await reconcile(env));
+  if (url.pathname === "/admin/issues") return json({ issues: await svc.health(), heartbeat: (await env.DB.prepare("SELECT at FROM periodic_runs WHERE name='heartbeat'").first<any>())?.at ?? null });
   if (url.pathname === "/admin/health") {
     const out: Record<string, unknown> = {};
     const step = async (k: string, f: () => Promise<unknown>) => {

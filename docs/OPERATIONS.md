@@ -53,3 +53,17 @@ cd blog && npm ci && npx -y node@24 node_modules/.bin/astro build
 - Covers: blog/scripts/og.mjs generates /og/<lang>/<slug>.png at build (satori + resvg + Google Fonts subset, never fails the build). Custom: photo captioned `/cover <id>`; `/cover <id> 默认` resets. Cover is part of the drafts hash.
 - Medium: job stage 'external'; Hark hourly task 8b12b5ba imports and marks done in D1.
 - Proofreading: translate → awaiting_proofread → Hark task a538a4ef → in_review → cron sends review card.
+
+## Core hardening (2026-11-05)
+- No auto-publish path exists any more: a message only creates a draft; publishing needs the review card's approve button (hash must be 16 hex chars and match the current version, targets, drafts and cover).
+- Webhook: allow-list checked first; each update_id claimed once (`seen_updates`, status pending/done/failed, payload kept only while pending). Cron replays pending plain-text posts after 2 min (max 3 tries; `articles.source_update` prevents duplicates and resumes translation). Buttons and commands are never replayed; they are marked failed and alerted.
+- Jobs: 90 s lease per job (`lease_until`), so overlapping cron/webhook runs cannot advance a job twice. Jobs for the same article+platform run in approval order; an older job that never touched the remote side is cancelled as superseded. `/retry` revives only the latest valid approval.
+- Medium takeover: `/medium <id> <url>` records a hand-published story (medium.com, not an edit page, not already used by another article); `/medium <id> skip` cancels. After 24 h without import the owner gets one message with manual steps.
+- Monitoring (cron, every 15 min, one alert per problem): failed jobs, jobs active >2 h, Medium waiting >24 h, proofreading waiting >2 h, unrecoverable updates; daily credential check (Telegram, DeepL incl. <10% quota, dev.to, Bluesky, GitHub push) and daily read-only remote reconciliation (blog URLs, Telegram message ids, Bluesky records, dev.to URLs and duplicate canonicals). `/health` in the bot; `/admin/issues`, `/admin/reconcile` with the admin token.
+- `once()` claims before running, so weekly digest/backup cannot run twice.
+
+### D1 recovery runbook (drilled 2026-11-05 on throwaway databases, never on production)
+1. Recent mistake (≤30 days): `wrangler d1 time-travel info pbb` → pick bookmark/timestamp → `wrangler d1 time-travel restore pbb --bookmark=<b>`. Drill: damaged a copy (deleted rows, changed statuses), restored to the bookmark; all 10 tables matched byte-for-byte.
+2. Copy for inspection: D1 export API (`/export`, polling) → SQL dump → import into a NEW database. Drill: 10/10 tables identical by row count and content hash. The dump contains drafts: keep it out of the repo and delete it after use.
+3. Database lost beyond 30 days: create DB, apply migrations 0001–0004, then `node worker/scripts/backup-to-sql.mjs backup/content.json` and run the SQL. Recovers published articles and their published versions only (the public backup has no drafts, glossary or history by design). Drill: published content hash identical.
+Limits: restoring in place rewinds everything after the bookmark (including publish records); drafts newer than the last export exist only in D1.

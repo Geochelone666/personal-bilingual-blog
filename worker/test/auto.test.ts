@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { makeWorld } from "./world";
 import { userTitle, heuristicTitle } from "../src/autotitle";
 
-describe("auto publish mode", () => {
+describe("drafting (no auto publish)", () => {
   it("title detection", () => {
     expect(userTitle("复古男孩\n正文第一段。")?.title).toBe("复古男孩");
     expect(userTitle("我是一个计算机学生，为什么要做blog呢？因为想要搞一些复古的东西。")).toBeNull();
@@ -10,28 +10,24 @@ describe("auto publish mode", () => {
     expect(heuristicTitle("我是一个计算机学生，为什么要做blog呢？")).toBe("我是一个计算机学生");
   });
 
-  it("one plain message -> published, one concise receipt with links, no buttons", async () => {
+  it("a plain message never publishes by itself, even with AUTO_PUBLISH=true left in the environment", async () => {
     const w = makeWorld();
-    w.env.AUTO_PUBLISH = "true";
+    (w.env as any).AUTO_PUBLISH = "true"; // legacy flag must have no effect
     w.env.AI = { run: async () => ({ response: "前沿的复古男孩" }) };
     await w.text("#文章\n我是一个计算机学生，为什么要做blog呢？因为想要搞一些复古的东西。总而言之，我也享受编程的乐趣。");
-    expect(w.sent.some((s) => s.payload.reply_markup)).toBe(false);
-    await w.tick(4);
+    await w.tick(6);
     const a: any = await w.DB.prepare("SELECT * FROM articles").first();
-    expect(a.status).toBe("published");
+    expect(a.status).toBe("in_review");
+    expect((await w.DB.prepare("SELECT COUNT(*) n FROM approvals").first<any>()).n).toBe(0);
+    expect((await w.DB.prepare("SELECT COUNT(*) n FROM publish_jobs").first<any>()).n).toBe(0);
+    expect(w.commits.size).toBe(1); // only the initial commit
+    expect(w.lastButtons().some((b) => b.startsWith("ap:"))).toBe(true);
     const v: any = await w.DB.prepare("SELECT title_zh FROM versions").first();
     expect(v.title_zh).toBe("前沿的复古男孩");
-    const msgs = w.texts();
-    expect(msgs.length).toBe(1);
-    expect(msgs[0]).toContain("✅ 《前沿的复古男孩》已发布");
-    expect(msgs[0]).toContain('<a href="');
-    await w.tick(3);
-    expect(w.texts().length).toBe(1);
   });
 
   it("long message split by Telegram is joined into one post", async () => {
     const w = makeWorld();
-    w.env.AUTO_PUBLISH = "true";
     const part1 = "长".repeat(4000);
     await w.text(part1);
     expect((await w.DB.prepare("SELECT COUNT(*) n FROM articles").first<any>()).n).toBe(0);
@@ -44,7 +40,7 @@ describe("auto publish mode", () => {
 describe("P1 cross-posting", () => {
   it("blog first, then Telegram channel + dev.to; one combined receipt; failures marked 未成功", async () => {
     const w = makeWorld();
-    Object.assign(w.env, { AUTO_PUBLISH: "true", ENABLED_PLATFORMS: "blog,telegram,devto,bluesky", TELEGRAM_CHANNEL: "@chan", DEVTO_API_KEY: "k" });
+    Object.assign(w.env, { ENABLED_PLATFORMS: "blog,telegram,devto,bluesky", TELEGRAM_CHANNEL: "@chan", DEVTO_API_KEY: "k" });
     const base = (globalThis as any).fetch;
     let devtoPosts = 0;
     let chanPosts = 0;
@@ -65,6 +61,7 @@ describe("P1 cross-posting", () => {
       return base(input, init);
     };
     await w.text("#文章\n标题\n用 `npm i` 安装依赖，再写 TypeScript 代码。");
+    await w.click(w.lastButtons().find((b) => b.startsWith("ap:"))!);
     const jobs = (await w.DB.prepare("SELECT platform FROM publish_jobs ORDER BY platform").all<any>()).results.map((j: any) => j.platform);
     expect(jobs).toEqual(["blog", "devto", "telegram"]); // bluesky not configured -> not enabled
     for (let i = 0; i < 40; i++) {
