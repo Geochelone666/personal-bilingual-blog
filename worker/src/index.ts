@@ -4,6 +4,7 @@ import { hmacHex, safeEqual, nowIso, splitTitleBody } from "./util";
 import { renderPreviewHtml } from "./render";
 import { deeplUsage } from "./deepl";
 import { userTitle, generateTitle } from "./autotitle";
+import { enabledPlatforms } from "./platforms";
 
 const HELP = `个人双语博客 · 写作 Bot
 
@@ -297,6 +298,9 @@ async function admin(req: Request, url: URL, env: Env): Promise<Response> {
     await step("d1", async () => ({ articles: (await env.DB.prepare("SELECT COUNT(*) n FROM articles").first<any>())?.n }));
     await step("telegram", async () => { const me = await svc.tg.call("getMe", {}); const wh = await svc.tg.call("getWebhookInfo", {}); return { bot: me.username, webhook: wh.url, pending: wh.pending_update_count, last_error: wh.last_error_message ?? null }; });
     await step("deepl", async () => { const u = await deeplUsage(env.DEEPL_API_KEY); return { used: u.character_count, limit: u.character_limit, keyType: "free(:fx)" }; });
+    if (env.DEVTO_API_KEY) await step("devto", async () => { const r = await fetch("https://dev.to/api/users/me", { headers: { "api-key": env.DEVTO_API_KEY!, "User-Agent": "pbb-writer" } }); if (!r.ok) throw new Error(`HTTP ${r.status}`); const j: any = await r.json(); return { user: j.username }; });
+    if (env.TELEGRAM_CHANNEL) await step("telegram_channel", async () => { const c = await svc.tg.call("getChat", { chat_id: env.TELEGRAM_CHANNEL }); return { title: c.title, username: c.username }; });
+    out.platforms = enabledPlatforms(env);
     await step("github", async () => {
       const r = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}`, { headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, "User-Agent": "pbb", Accept: "application/vnd.github+json" } });
       const j: any = await r.json(); if (!r.ok) throw new Error(`HTTP ${r.status}`); return { repo: j.full_name, private: j.private, push: j.permissions?.push ?? null };
