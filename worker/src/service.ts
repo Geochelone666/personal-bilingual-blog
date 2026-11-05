@@ -1,6 +1,7 @@
 import { Env } from "./env";
 import { enabledPlatforms, postTo, PLATFORM_LABEL, PLATFORM_ORDER } from "./platforms";
 import { sha256Hex, nowIso, randomId, zhHashInput, normalizeBody, makeSlug, backoffSeconds, addSeconds, hmacHex } from "./util";
+import { fixSentenceSpacing } from "./util";
 import { translateZhToEn, QuotaError, KeyTypeError, deeplUsage } from "./deepl";
 import { runQc } from "./qc";
 import { approvalHash, checkApproval, canonicalPlatforms, idempotencyKey } from "./approval";
@@ -219,7 +220,7 @@ export class Service {
           fetcher: this.fetcher,
         });
         title = r.title;
-        body = r.body;
+        body = fixSentenceSpacing(r.body);
         source = "deepl";
         const billed = r.actualChars ?? r.chars;
         await this.db().batch([
@@ -240,7 +241,12 @@ export class Service {
         this.db().prepare("UPDATE articles SET status='in_review', updated_at=? WHERE id=?").bind(nowIso(), v.article_id),
       ]);
       await this.maybeRefreshSlug(v.article_id, title, v.zh_hash);
-      if (this.auto) {
+      if (this.auto && this.env.PROOFREAD === "true") {
+        // Hark proofreads the English, then flips the article back to in_review;
+        // the cron's stuck-draft sweep auto-approves and publishes it.
+        await this.db().prepare("UPDATE articles SET status='awaiting_proofread', updated_at=? WHERE id=?").bind(nowIso(), v.article_id).run();
+        await this.say(chatId, `英文已译好，等待校对后自动发布（${v.article_id}）。`);
+      } else if (this.auto) {
         if (await this.autoApprove(versionId, chatId)) await this.processDueJobs();
       } else await this.sendReview(versionId, chatId);
     } catch (e: any) {

@@ -77,3 +77,8 @@ export function backoffSeconds(attempts: number): number {
 export function addSeconds(iso: string, s: number): string {
   return new Date(new Date(iso).getTime() + s * 1000).toISOString();
 }
+
+/** DeepL sometimes joins sentences from unspaced Chinese input ("progress.Technological"). */
+export function fixSentenceSpacing(s: string): string {
+  return s.replace(/([a-z0-9][.!?]|[.!?][)\u201d\u2019"])(?=[A-Z\u201c])/g, "$1 ");
+}

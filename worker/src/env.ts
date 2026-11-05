@@ -26,6 +26,7 @@ export interface Env {
   TELEGRAM_CHANNEL?: string; // @username of the Chinese channel
   TELEGRAM_CHANNEL_EN?: string; // @username of the English channel
   BLUESKY_HANDLE?: string;
+  PROOFREAD?: string; // "true": auto-published articles wait in awaiting_proofread until Hark proofreads the English (user asked 2026-11-05)
   AUTO_PUBLISH?: string; // "true": every message from an allowed user is published without an approval step (user asked 2026-11-04)
   DEEPL_MIN_REMAINING: string; // safety margin in chars, e.g. "2000"
 }
