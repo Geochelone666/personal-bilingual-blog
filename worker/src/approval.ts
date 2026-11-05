@@ -5,7 +5,9 @@ export function canonicalPlatforms(platforms: readonly string[]): string[] {
 }
 
 /** The approval hash binds the exact version, both text hashes and the platform list. */
-export async function approvalHash(versionId: string, zhHash: string, enHash: string, platforms: readonly string[]): Promise<string> {
+export async function approvalHash(versionId: string, zhHash: string, enHash: string, platforms: readonly string[], draftsHash?: string): Promise<string> {
+  // v2 also binds the exact per-platform content (drafts incl. cover) that was shown for review.
+  if (draftsHash) return sha256Hex(`v2|${versionId}|${zhHash}|${enHash}|${JSON.stringify(canonicalPlatforms(platforms))}|${draftsHash}`);
   return sha256Hex(`v1|${versionId}|${zhHash}|${enHash}|${JSON.stringify(canonicalPlatforms(platforms))}`);
 }
 
@@ -15,6 +17,7 @@ export interface ApprovalCheckInput {
   version: { id: string; zh_hash: string; en_hash: string | null; translation_status: string } | null;
   platforms: readonly string[];
   allowedPlatforms: readonly string[];
+  draftsHash?: string;
 }
 
 /**
@@ -32,7 +35,7 @@ export async function checkApproval(i: ApprovalCheckInput): Promise<{ ok: true; 
   if (!plats.length) return { ok: false, reason: "未选择发布平台" };
   const bad = plats.filter((p) => !i.allowedPlatforms.includes(p));
   if (bad.length) return { ok: false, reason: `平台未启用：${bad.join(", ")}` };
-  const hash = await approvalHash(i.version.id, i.version.zh_hash, i.version.en_hash, plats);
+  const hash = await approvalHash(i.version.id, i.version.zh_hash, i.version.en_hash, plats, i.draftsHash);
   if (!hash.startsWith(i.requested.hashPrefix)) {
     return { ok: false, reason: "审批内容与预览不一致（哈希不匹配），请重新审核" };
   }

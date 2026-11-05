@@ -14,6 +14,8 @@ const posts = defineCollection({
     versionHash: z.string(),
     approvalHash: z.string(),
     translationOf: z.string().optional(),
+    category: z.string().optional(),
+    cover: z.string().optional(),
   }),
 });
 

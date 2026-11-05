@@ -60,19 +60,17 @@ describe("end-to-end (fake Telegram/DeepL/GitHub/Pages)", () => {
     expect((await w.DB.prepare("SELECT COUNT(*) n FROM publish_jobs").first()).n).toBe(1);
 
     await w.tick(); // commit
-    expect(w.texts().some((t) => t.startsWith("① GitHub 提交成功"))).toBe(true);
-    expect(w.texts().some((t) => t.startsWith("②"))).toBe(false);
     await w.tick(); // pages building
     await w.tick(); // pages success
-    expect(w.texts().some((t) => t.startsWith("② Pages 部署成功"))).toBe(true);
-    expect(w.texts().some((t) => t.startsWith("③"))).toBe(false);
+    expect(w.texts().some((t) => t.includes("已发布"))).toBe(false); // no receipt before verification
     await w.tick(); // verify
-    expect(w.texts().some((t) => t.startsWith("③ 公开页面验证成功"))).toBe(true);
-
+    const receipts = w.texts().filter((t) => t.includes("》已发布"));
+    expect(receipts.length).toBe(1);
+    expect(receipts[0]).toContain("/zh/posts/");
     const a = await w.DB.prepare("SELECT * FROM articles").first();
     expect(a.status).toBe("published");
     const ev = (await w.DB.prepare("SELECT stage, ok FROM publish_events ORDER BY id").all()).results.map((e: any) => e.stage);
-    expect(ev).toEqual(["github_commit", "pages_deploy", "url_verify"]);
+    expect(ev).toEqual(["github_commit", "pages_deploy", "url_verify", "receipt"]);
 
     // more cron ticks / clicks never produce a second commit
     const commitsBefore = w.commits.size;
@@ -176,7 +174,7 @@ describe("end-to-end (fake Telegram/DeepL/GitHub/Pages)", () => {
   it("protected preview requires a valid signature", async () => {
     const w = makeWorld();
     await w.text(ARTICLE);
-    const review = w.texts().find((t) => t.includes("双语预览"))!;
+    const review = w.texts().find((t) => t.includes("完整预览"))!;
     const link = review.match(/https:\/\/w\.example\/preview\/\S+/)![0];
     const worker = (await import("../src/index")).default;
     const ok = await worker.fetch(new Request(link), w.env, {} as any);

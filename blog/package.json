@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build && pagefind --site dist",
+    "build": "astro build && node scripts/og.mjs && pagefind --site dist",
     "preview": "astro preview"
   },
   "dependencies": {
@@ -13,6 +13,8 @@
     "astro": "^7.4.5"
   },
   "devDependencies": {
-    "pagefind": "^1.6.0"
+    "@resvg/resvg-js": "^2.6.2",
+    "pagefind": "^1.6.0",
+    "satori": "^0.63.2"
   }
 }

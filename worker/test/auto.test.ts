@@ -14,7 +14,7 @@ describe("auto publish mode", () => {
     const w = makeWorld();
     w.env.AUTO_PUBLISH = "true";
     w.env.AI = { run: async () => ({ response: "前沿的复古男孩" }) };
-    await w.text("我是一个计算机学生，为什么要做blog呢？因为想要搞一些复古的东西。总而言之，我也享受编程的乐趣。");
+    await w.text("#文章\n我是一个计算机学生，为什么要做blog呢？因为想要搞一些复古的东西。总而言之，我也享受编程的乐趣。");
     expect(w.sent.some((s) => s.payload.reply_markup)).toBe(false);
     await w.tick(4);
     const a: any = await w.DB.prepare("SELECT * FROM articles").first();
@@ -64,7 +64,7 @@ describe("P1 cross-posting", () => {
       }
       return base(input, init);
     };
-    await w.text("标题\n正文内容。");
+    await w.text("#文章\n标题\n用 `npm i` 安装依赖，再写 TypeScript 代码。");
     const jobs = (await w.DB.prepare("SELECT platform FROM publish_jobs ORDER BY platform").all<any>()).results.map((j: any) => j.platform);
     expect(jobs).toEqual(["blog", "devto", "telegram"]); // bluesky not configured -> not enabled
     for (let i = 0; i < 40; i++) {

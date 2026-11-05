@@ -12,8 +12,8 @@ export interface PostInput {
 }
 type F = typeof fetch;
 
-export const PLATFORM_LABEL: Record<string, string> = { blog: "博客", telegram: "Telegram 中文频道", telegram_en: "Telegram 英文频道", devto: "dev.to", bluesky: "Bluesky" };
-export const PLATFORM_ORDER = ["blog", "telegram", "telegram_en", "devto", "bluesky"];
+export const PLATFORM_LABEL: Record<string, string> = { blog: "博客", telegram: "Telegram 中文频道", telegram_en: "Telegram 英文频道", devto: "dev.to", bluesky: "Bluesky", medium: "Medium" };
+export const PLATFORM_ORDER = ["blog", "telegram", "telegram_en", "bluesky", "medium", "devto"];
 
 /** A platform is enabled when it is listed in ENABLED_PLATFORMS and its credentials exist. */
 export function enabledPlatforms(env: Env): string[] {
@@ -24,6 +24,7 @@ export function enabledPlatforms(env: Env): string[] {
     telegram_en: !!env.TELEGRAM_CHANNEL_EN,
     devto: !!env.DEVTO_API_KEY,
     bluesky: !!env.BLUESKY_HANDLE && !!env.BLUESKY_APP_PASSWORD,
+    medium: true, // published by Hark's browser task (no Medium API)
   };
   const out = PLATFORM_ORDER.filter((p) => listed.includes(p) && ready[p]);
   return out.includes("blog") ? out : ["blog", ...out];

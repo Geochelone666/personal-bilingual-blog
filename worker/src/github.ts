@@ -33,7 +33,7 @@ export class GitHub {
   }
 
   /** Commits all files in one commit on top of the branch head. Returns the new commit sha. */
-  async commitFiles(branch: string, files: Array<{ path: string; content: string }>, message: string): Promise<string> {
+  async commitFiles(branch: string, files: Array<{ path: string; content?: string; base64?: string }>, message: string): Promise<string> {
     const ref = await this.call(`/git/ref/heads/${encodeURIComponent(branch)}`);
     if (!ref) throw new Error(`分支 ${branch} 不存在`);
     const headSha: string = ref.object.sha;
@@ -42,7 +42,11 @@ export class GitHub {
       method: "POST",
       body: JSON.stringify({
         base_tree: head.tree.sha,
-        tree: files.map((f) => ({ path: f.path, mode: "100644", type: "blob", content: f.content })),
+        tree: await Promise.all(files.map(async (f) => {
+          if (f.base64 == null) return { path: f.path, mode: "100644", type: "blob", content: f.content };
+          const b = await this.call(`/git/blobs`, { method: "POST", body: JSON.stringify({ content: f.base64, encoding: "base64" }) });
+          return { path: f.path, mode: "100644", type: "blob", sha: b.sha };
+        })),
       }),
     });
     const commit = await this.call(`/git/commits`, {

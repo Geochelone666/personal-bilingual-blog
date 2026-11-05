@@ -4,14 +4,19 @@ import { Service } from "./service";
 import { hmacHex, safeEqual, nowIso, splitTitleBody } from "./util";
 import { renderPreviewHtml } from "./render";
 import { deeplUsage } from "./deepl";
-import { userTitle, generateTitle } from "./autotitle";
+import { userTitle, generateTitle, heuristicTitle } from "./autotitle";
+import { detectKind } from "./p4";
+import { sha256Bytes } from "./service";
 import { enabledPlatforms } from "./platforms";
 
 const HELP = `个人双语博客 · 写作 Bot
 
-直接发一条消息即可投稿：第一行是标题，后面是正文（支持 Markdown）。
-长文：先发 /new，再分多条发送，最后发 /done。
-也可以直接发送 .md / .txt 文件。
+直接发消息投稿，每次都会先给你审核，批准后才发布。
+· 短想法（约 280 字以内）：发到两个 TG 频道和 Bluesky，不进博客
+· 正式文章：第一行可写标题；博客中英全文，并推荐 Medium / DEV 等
+· 开头写 #想法 或 #文章 可强制类型
+长文可分多条发，或 /new … /done，也可发 .md / .txt 文件。
+替换封面：发图片并配文 /cover <编号>；/cover <编号> 默认 恢复自动封面
 
 /list 最近文章
 /status <编号> 查看状态和发布回执
@@ -33,7 +38,7 @@ export default {
     try {
       if (req.method === "POST" && url.pathname === "/telegram/webhook") return await webhook(req, env, ctx);
       if (req.method === "GET" && url.pathname.startsWith("/preview/")) return await preview(url, env);
-      if (url.pathname === "/hit" && (req.method === "POST" || req.method === "GET")) return await recordHit(env, url);
+      if (url.pathname === "/hit" && (req.method === "POST" || req.method === "GET")) return await recordHit(env, url, req);
       if (url.pathname.startsWith("/admin/")) return await admin(req, url, env);
       if (url.pathname === "/") return new Response("ok", { headers: { "X-Robots-Tag": "noindex" } });
       return new Response("not found", { status: 404 });
@@ -45,7 +50,7 @@ export default {
 
   async scheduled(_ev: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil((async () => {
-      if (env.AUTO_PUBLISH === "true") await autoHousekeeping(env);
+      await autoHousekeeping(env);
       await new Service(env).processDueJobs();
       await weekly(env).catch((e) => console.error("weekly", e));
     })());
@@ -100,6 +105,20 @@ async function handleUpdate(update: any, env: Env) {
       return retranslate(svc, a, chatId);
     } else if (kind === "dc") {
       reply = await svc.discard(a);
+    } else if (kind === "tp") {
+      reply = await svc.toggleTarget(a, b, chatId, cq.message.message_id);
+    } else if (kind === "st") {
+      await svc.tg.send(chatId, await svc.status(a));
+      reply = "ok";
+    } else if (kind === "ez" || kind === "ee") {
+      const art = await svc.article(a);
+      if (!art) reply = "找不到这篇文章";
+      else {
+        await setState(env, cq.from.id, kind === "ez" ? "edit_zh" : "edit_en", a);
+        const q = art.kind === "quick";
+        await svc.tg.send(chatId, kind === "ez" ? `请发送完整的新中文稿${q ? "" : "（第一行标题）"}。/cancel 取消` : `请发送完整的英文稿${q ? "" : "（第一行标题）"}。/cancel 取消`);
+        reply = "等待新稿";
+      }
     }
     await svc.tg.answerCallback(cq.id, reply || "ok");
     return;
@@ -112,6 +131,15 @@ async function handleUpdate(update: any, env: Env) {
   const state = await env.DB.prepare("SELECT * FROM chat_state WHERE user_id=?").bind(userId).first<any>();
   const mode = state?.mode ?? "idle";
 
+  // custom cover: a photo captioned "/cover <id>"
+  if (msg.photo?.length) {
+    const m = String(msg.caption ?? "").match(/^\/cover(?:@\w+)?\s+(\S+)/);
+    if (!m) return svc.tg.send(chatId, "要替换封面，请给图片配文：/cover <编号>");
+    const ph = msg.photo[msg.photo.length - 1];
+    if (ph.file_size && ph.file_size > 5_000_000) return svc.tg.send(chatId, "图片太大（>5MB）");
+    const bytes = await svc.downloadTgFile(ph.file_id);
+    return svc.setCover(m[1], chatId, ph.file_id, await sha256Bytes(bytes));
+  }
   // documents (.md / .txt)
   let text: string | null = msg.text ?? null;
   if (!text && msg.document) {
@@ -123,7 +151,7 @@ async function handleUpdate(update: any, env: Env) {
   }
   if (!text) return svc.tg.send(chatId, "目前只接受文字或 .md/.txt 文件");
 
-  if (env.AUTO_PUBLISH === "true" && !text.startsWith("/") && !["edit_zh", "edit_en", "collect_new"].includes(mode)) {
+  if (!text.startsWith("/") && !["edit_zh", "edit_en", "collect_new"].includes(mode)) {
     return autoPost(env, svc, userId, chatId, text, state);
   }
   if (env.AUTO_PUBLISH === "true" && (text.trim() === "/start" || text.trim() === "/help")) {
@@ -164,6 +192,11 @@ async function handleUpdate(update: any, env: Env) {
         await setState(env, userId, cmd === "/edit" ? "edit_zh" : "edit_en", arg);
         return svc.tg.send(chatId, cmd === "/edit" ? "请发送完整的新中文稿（第一行标题）。/cancel 取消" : "请发送完整的英文稿（第一行标题）。/cancel 取消");
       }
+      case "/cover": {
+        const [id, opt] = arg.split(/\s+/);
+        if (id && /^(默认|default|reset)$/i.test(opt ?? "")) return svc.setCover(id, chatId, null, null);
+        return svc.tg.send(chatId, "替换封面：发送图片并配文 /cover <编号>；恢复自动封面：/cover <编号> 默认");
+      }
       case "/retranslate":
         return arg ? retranslate(svc, arg, chatId) : svc.tg.send(chatId, "用法：/retranslate <编号>");
       case "/retry":
@@ -194,7 +227,8 @@ async function handleUpdate(update: any, env: Env) {
     return svc.tg.send(chatId, `已收到（共 ${buf.length} 字符），继续发送或 /done 完成`);
   }
   if (mode === "edit_zh" || mode === "edit_en") {
-    const tb = splitTitleBody(text);
+    const art = await svc.article(state.article_id);
+    const tb = art?.kind === "quick" ? { title: mode === "edit_zh" ? heuristicTitle(text) : text.trim().split(/[.!?\n]/)[0].slice(0, 60), body: text.trim() } : splitTitleBody(text);
     if (!tb) return svc.tg.send(chatId, "需要标题（第一行）和正文");
     await setState(env, userId, "idle");
     return mode === "edit_zh" ? svc.editZh(state.article_id, chatId, tb.title, tb.body) : svc.editEn(state.article_id, chatId, tb.title, tb.body);
@@ -220,11 +254,13 @@ async function autoPost(env: Env, svc: Service, userId: number, chatId: number, 
   await publishText(env, svc, userId, chatId, joined);
 }
 
-async function publishText(env: Env, svc: Service, userId: number, chatId: number, text: string) {
+async function publishText(env: Env, svc: Service, userId: number, chatId: number, raw: string) {
+  const { kind, text } = detectKind(raw);
+  if (kind === "quick") return void (await svc.createArticle(userId, chatId, heuristicTitle(text), text.trim(), "quick"));
   const own = userTitle(text);
   const title = own?.title ?? (await generateTitle(env.AI, text));
   const body = own?.body ?? text.trim();
-  await svc.createArticle(userId, chatId, title, body);
+  await svc.createArticle(userId, chatId, title, body, "article");
 }
 
 async function autoHousekeeping(env: Env) {
@@ -237,9 +273,10 @@ async function autoHousekeeping(env: Env) {
     await publishText(env, svc, st.user_id, Number(st.article_id), st.buffer ?? "").catch((e) => console.error(e));
   }
   // Drafts that finished translating but whose auto-approval was cut off.
-  const stuck = await env.DB.prepare("SELECT a.id, a.created_by, a.current_version_id FROM articles a JOIN versions v ON v.id=a.current_version_id WHERE a.status='in_review' AND v.translation_status='done' AND a.updated_at<=?").bind(new Date(Date.now() - 120_000).toISOString()).all<any>();
+  const stuck = await env.DB.prepare("SELECT a.id, a.created_by, a.current_version_id, a.review_sent_for FROM articles a JOIN versions v ON v.id=a.current_version_id WHERE a.status='in_review' AND v.translation_status='done' AND a.updated_at<=?").bind(new Date(Date.now() - 120_000).toISOString()).all<any>();
   for (const a of stuck.results ?? []) {
-    await svc.autoApprove(a.current_version_id, a.created_by).catch((e) => console.error(e));
+    if (env.AUTO_PUBLISH === "true") await svc.autoApprove(a.current_version_id, a.created_by).catch((e) => console.error(e));
+    else if (!String(a.review_sent_for ?? "").startsWith(`${a.current_version_id}|`)) await svc.sendReview(a.current_version_id, a.created_by).catch((e) => console.error(e));
   }
 }
 
@@ -259,6 +296,12 @@ async function preview(url: URL, env: Env): Promise<Response> {
   const svc = new Service(env);
   const v = await svc.version(vid);
   if (!v || !v.en_hash) return new Response("not found", { status: 404 });
+  const art = await svc.article(v.article_id);
+  if (url.pathname.endsWith("/cover")) {
+    if (!art?.cover_file_id) return new Response("no cover", { status: 404 });
+    return new Response(await svc.downloadTgFile(art.cover_file_id), { headers: { "Content-Type": "image/jpeg", "Cache-Control": "private, no-store" } });
+  }
+  const st = art && art.current_version_id === v.id ? await svc.reviewState(art.id) : null;
   const html = renderPreviewHtml({
     articleId: v.article_id,
     versionNo: v.version_no,
@@ -269,6 +312,11 @@ async function preview(url: URL, env: Env): Promise<Response> {
     zhHash: v.zh_hash,
     enHash: v.en_hash,
     qc: v.qc_json ? JSON.parse(v.qc_json) : null,
+    kind: art?.kind ?? "article",
+    category: art?.category ?? "essay",
+    drafts: st?.drafts ?? null,
+    draftsHash: st?.draftsHash ?? null,
+    coverUrl: art?.cover_file_id ? `${url.pathname}/cover${url.search}` : null,
   });
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex, nofollow", "Cache-Control": "private, no-store" } });
 }

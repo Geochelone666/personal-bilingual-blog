@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cleanPath, cleanReferrer, weekKey } from "../src/p3";
+import { cleanPath, cleanReferrer, weekKey, torontoParts, isBot } from "../src/p3";
 import { fixSentenceSpacing } from "../src/util";
 
 describe("p3", () => {
@@ -22,5 +22,16 @@ describe("p3", () => {
   it("fixes run-together sentences", () => {
     expect(fixSentenceSpacing("progress.Technological way.The x.)With")).toBe("progress. Technological way. The x.) With");
     expect(fixSentenceSpacing("3.5 and e.g. fine")).toBe("3.5 and e.g. fine");
+  });
+  it("Toronto wall clock across DST", () => {
+    expect(torontoParts(new Date("2026-11-02T14:30:00Z"))).toMatchObject({ weekday: 1, hour: 9 }); // EST
+    expect(torontoParts(new Date("2026-10-26T13:30:00Z"))).toMatchObject({ weekday: 1, hour: 9 }); // EDT
+    expect(torontoParts(new Date("2026-11-03T03:00:00Z"))).toMatchObject({ weekday: 1, hour: 22 }); // still Monday locally
+  });
+  it("filters bots", () => {
+    expect(isBot("Mozilla/5.0 (compatible; Googlebot/2.1)")).toBe(true);
+    expect(isBot("Mozilla/5.0 HeadlessChrome/120")).toBe(true);
+    expect(isBot(null)).toBe(true);
+    expect(isBot("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36")).toBe(false);
   });
 });

@@ -2,9 +2,10 @@
 import { SITE, IS_PRODUCTION, SITE_URL, HIT_URL } from "../site.config";
 interface Props {
   lang: "zh" | "en"; title?: string; versionHash?: string; alternate?: string;
-  description?: string; path?: string; article?: { published: Date; modified?: Date };
+  description?: string; path?: string; article?: { published: Date; modified?: Date }; image?: string;
 }
-const { lang, title, versionHash, alternate, description, path, article } = Astro.props;
+const { lang, title, versionHash, alternate, description, path, article, image } = Astro.props;
+const ogImage = `${SITE_URL}${image ?? `/og/${lang}/default.png`}`;
 const fullTitle = title ? `${title} · ${SITE.name[lang]}` : SITE.name[lang];
 const other = lang === "zh" ? "en" : "zh";
 const desc = description || SITE.description[lang];
@@ -16,7 +17,7 @@ const enUrl = lang === "en" ? canonical : altAbs;
 const ld = article
   ? { "@context": "https://schema.org", "@type": "BlogPosting", headline: title, description: desc, inLanguage: lang === "zh" ? "zh-CN" : "en",
       datePublished: article.published.toISOString(), dateModified: (article.modified ?? article.published).toISOString(),
-      author: { "@type": "Person", name: SITE.author[lang] }, mainEntityOfPage: canonical }
+      author: { "@type": "Person", name: SITE.author[lang] }, mainEntityOfPage: canonical, image: ogImage }
   : { "@context": "https://schema.org", "@type": "Blog", name: SITE.name[lang], url: canonical, inLanguage: lang === "zh" ? "zh-CN" : "en" };
 const t = lang === "zh" ? { search: "搜索", lang: "English" } : { search: "Search", lang: "中文" };
 ---
@@ -40,7 +41,11 @@ const t = lang === "zh" ? { search: "搜索", lang: "English" } : { search: "Sea
     <meta property="og:url" content={canonical} />
     <meta property="og:type" content={article ? "article" : "website"} />
     <meta property="og:locale" content={lang === "zh" ? "zh_CN" : "en_US"} />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={ogImage} />
     <meta name="twitter:title" content={title ?? SITE.name[lang]} />
     <meta name="twitter:description" content={desc} />
     {article && <meta property="article:published_time" content={article.published.toISOString()} />}
@@ -62,7 +67,13 @@ const t = lang === "zh" ? { search: "搜索", lang: "English" } : { search: "Sea
     <main><slot /></main>
     <footer>© {SITE.author[lang]}</footer>
     {IS_PRODUCTION && <script is:inline define:vars={{ hit: HIT_URL }}>
-      try { navigator.sendBeacon(hit + "?p=" + encodeURIComponent(location.pathname) + "&r=" + encodeURIComponent(document.referrer ? new URL(document.referrer).host : "")); } catch (e) {}
+      try {
+        var k = "pbb:" + location.pathname;
+        if (!sessionStorage.getItem(k)) {
+          sessionStorage.setItem(k, "1");
+          navigator.sendBeacon(hit + "?p=" + encodeURIComponent(location.pathname) + "&r=" + encodeURIComponent(document.referrer ? new URL(document.referrer).host : ""));
+        }
+      } catch (e) {}
     </script>}
   </body>
 </html>

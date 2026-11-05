@@ -1,10 +1,11 @@
 import Database from "better-sqlite3";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 /** Minimal D1 API shim over better-sqlite3 for local tests (prepare/bind/first/all/run/batch). */
 export function makeD1(): any {
   const db = new Database(":memory:");
-  db.exec(readFileSync(new URL("../migrations/0001_init.sql", import.meta.url), "utf8"));
+  const dir = new URL("../migrations/", import.meta.url);
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".sql")).sort()) db.exec(readFileSync(new URL(f, dir), "utf8"));
   class Stmt {
     constructor(public sql: string, public args: unknown[] = []) {}
     bind(...a: unknown[]) {
