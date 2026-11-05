@@ -20,6 +20,8 @@ export async function reconcile(env: Env, f: F = fetch): Promise<{ checked: numb
     const remote = j.remote_id ? JSON.parse(j.remote_id) : null;
     try {
       if (j.platform === "blog") {
+        // Preview (staging) publishes are not durable by design; only the production site is checked.
+        if (env.SITE_URL && urls.length && !urls.every((u) => u.startsWith(env.SITE_URL))) continue;
         for (const u of urls) {
           const r = await f(u, { method: "GET", redirect: "manual" });
           if (r.status !== 200) bad(j, `${new URL(u).pathname} HTTP ${r.status}`);
@@ -42,7 +44,10 @@ export async function reconcile(env: Env, f: F = fetch): Promise<{ checked: numb
       } else if (j.platform === "devto") {
         const u = urls[0];
         if (u) {
-          const r = await f(u, { method: "GET" });
+          // dev.to rejects requests without a User-Agent (HTTP 403); use the API by id when we have it.
+          const r = remote?.id
+            ? await f(`https://dev.to/api/articles/${remote.id}`, { headers: { "User-Agent": "pbb-writer", accept: "application/vnd.forem.api-v1+json" } })
+            : await f(u, { method: "GET", headers: { "User-Agent": "pbb-writer" } });
           if (r.status !== 200) bad(j, `HTTP ${r.status}`);
         }
       } else continue; // Medium: no reliable read access
@@ -54,7 +59,7 @@ export async function reconcile(env: Env, f: F = fetch): Promise<{ checked: numb
   // Duplicates on dev.to: more than one article with the same canonical URL.
   if (env.DEVTO_API_KEY) {
     try {
-      const r = await f("https://dev.to/api/articles/me/all?per_page=1000", { headers: { "api-key": env.DEVTO_API_KEY, accept: "application/vnd.forem.api-v1+json" } });
+      const r = await f("https://dev.to/api/articles/me/all?per_page=1000", { headers: { "api-key": env.DEVTO_API_KEY, accept: "application/vnd.forem.api-v1+json", "User-Agent": "pbb-writer" } });
       if (r.ok) for (const a of (await r.json()) as any[]) if (a.canonical_url) canon.set(a.canonical_url, (canon.get(a.canonical_url) ?? 0) + 1);
       for (const [c, n] of canon) if (n > 1) problems.push({ key: `dup:devto:${c}`, text: `dev.to 上同一篇文章有 ${n} 份（canonical ${c}）` });
     } catch { /* reported by the per-job check */ }
