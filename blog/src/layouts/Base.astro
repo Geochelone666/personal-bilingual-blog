@@ -25,7 +25,7 @@ const other = lang === "zh" ? "en" : "zh";
   </head>
   <body>
     <header>
-      <a class="home" href={`/${lang}/`}>{SITE.name[lang]}</a>
+      <a class="home" href={`/${lang}/`}>{SITE.mark}</a>
       <nav><a href={alternate ?? `/${other}/`}>{lang === "zh" ? "English" : "中文"}</a></nav>
     </header>
     <main><slot /></main>
