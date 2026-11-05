@@ -106,11 +106,21 @@ export async function buildBackup(env: Env): Promise<string> {
 }
 
 /** Run `fn` once per key (e.g. ISO week). Returns true when it ran. */
-async function once(env: Env, name: string, key: string, fn: () => Promise<void>): Promise<boolean> {
-  const row = await env.DB.prepare("SELECT last_key FROM periodic_runs WHERE name=?").bind(name).first<any>();
-  if (row?.last_key === key) return false;
-  await fn();
-  await env.DB.prepare("INSERT INTO periodic_runs (name, last_key, at) VALUES (?,?,?) ON CONFLICT(name) DO UPDATE SET last_key=excluded.last_key, at=excluded.at").bind(name, key, nowIso()).run();
+export async function once(env: Env, name: string, key: string, fn: () => Promise<void>): Promise<boolean> {
+  // Claim first (atomic in D1) so overlapping cron runs cannot both send; release the claim if fn fails.
+  const prev = await env.DB.prepare("SELECT last_key FROM periodic_runs WHERE name=?").bind(name).first<any>();
+  if (prev?.last_key === key) return false;
+  const claim = prev
+    ? await env.DB.prepare("UPDATE periodic_runs SET last_key=?, at=? WHERE name=? AND last_key=?").bind(key, nowIso(), name, prev.last_key).run()
+    : await env.DB.prepare("INSERT OR IGNORE INTO periodic_runs (name, last_key, at) VALUES (?,?,?)").bind(name, key, nowIso()).run();
+  if (!claim.meta.changes) return false;
+  try {
+    await fn();
+  } catch (e) {
+    if (prev) await env.DB.prepare("UPDATE periodic_runs SET last_key=? WHERE name=? AND last_key=?").bind(prev.last_key, name, key).run();
+    else await env.DB.prepare("DELETE FROM periodic_runs WHERE name=? AND last_key=?").bind(name, key).run();
+    throw e;
+  }
   return true;
 }
 

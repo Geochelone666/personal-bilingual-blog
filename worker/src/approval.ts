@@ -36,7 +36,7 @@ export async function checkApproval(i: ApprovalCheckInput): Promise<{ ok: true; 
   const bad = plats.filter((p) => !i.allowedPlatforms.includes(p));
   if (bad.length) return { ok: false, reason: `平台未启用：${bad.join(", ")}` };
   const hash = await approvalHash(i.version.id, i.version.zh_hash, i.version.en_hash, plats, i.draftsHash);
-  if (!hash.startsWith(i.requested.hashPrefix)) {
+  if (!/^[0-9a-f]{16}$/.test(i.requested.hashPrefix) || !hash.startsWith(i.requested.hashPrefix)) {
     return { ok: false, reason: "审批内容与预览不一致（哈希不匹配），请重新审核" };
   }
   return { ok: true, hash };
