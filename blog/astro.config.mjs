@@ -5,5 +5,5 @@ import sitemap from "@astrojs/sitemap";
 export default defineConfig({
   site: process.env.SITE_URL || "https://personal-bilingual-blog.pages.dev",
   trailingSlash: "always",
-  integrations: [sitemap()],
+  integrations: [sitemap({ filter: (p) => !/\/(search|404)\//.test(p) })],
 });

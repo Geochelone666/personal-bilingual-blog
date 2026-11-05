@@ -1,0 +1,14 @@
+---
+import Base from "../../../layouts/Base.astro";
+---
+<Base lang="zh" title="搜索" alternate="/en/search/">
+  <h1>搜索</h1>
+  <link href="/pagefind/pagefind-ui.css" rel="stylesheet" />
+  <div id="search"></div>
+  <script is:inline src="/pagefind/pagefind-ui.js"></script>
+  <script is:inline>
+    window.addEventListener("DOMContentLoaded", () => {
+      new PagefindUI({ element: "#search", showSubResults: true, showImages: false, translations: { placeholder: "搜索文章…", zero_results: "没有找到" } });
+    });
+  </script>
+</Base>
