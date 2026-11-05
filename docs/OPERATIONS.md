@@ -31,3 +31,12 @@ TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET, DEEPL_API_KEY, GITHUB_TOKEN（细�
 cd worker && npm ci && npx vitest run && npx tsc --noEmit
 cd blog && npm ci && npx -y node@24 node_modules/.bin/astro build
 ```
+
+## P3 (2026-11-05)
+- RSS: /zh/rss.xml, /en/rss.xml (full content). Sitemap: /sitemap-index.xml (search/404 excluded), robots.txt points to it.
+- SEO: canonical, hreflang zh-CN/en/x-default, description from excerpt, OG/Twitter, JSON-LD BlogPosting, 404 page.
+- Search: Pagefind, built in CI (`astro build && pagefind --site dist`), pages /zh/search/, /en/search/.
+- Stats: blog pages sendBeacon to Worker /hit (path + referrer host only, no IP/cookies) → D1 page_views. Bot /stats [days]. Weekly digest Mon after 14:00 UTC to owner.
+- Backup: Worker commits backup/content.json (articles, versions, jobs, glossary; no Telegram ids) every Monday; Git history = versioned backup. D1 Time Travel covers recent point-in-time restore. Workflow ignores backup/**, worker/**, docs/**.
+- Proofreading: PROOFREAD=true → awaiting_proofread; Hark task a538a4ef every 30 min proofreads EN and sets in_review.
+- Medium importer caches URLs; when re-importing use ?v=N and reset canonical. Medium limits stories published per 24h (deletes seem to count).
