@@ -86,13 +86,23 @@ export async function collectStats(env: Env, days = 7, f: F = fetch): Promise<st
   return lines.join("\n");
 }
 
-/** Public content only: no Telegram ids, chat state or usage logs (the repo is public). */
+/**
+ * This file lives in a PUBLIC repository. Export only versions that were
+ * successfully published to the blog, never pending drafts or review edits.
+ * In particular, first_published_at alone is insufficient: a previously
+ * published article may currently have an unpublished revision.
+ */
 export async function buildBackup(env: Env): Promise<string> {
-  const articles = await env.DB.prepare("SELECT id, slug, kind, category, status, current_version_id, first_published_at, created_at, updated_at FROM articles WHERE status!='discarded' ORDER BY created_at").all<any>();
-  const versions = await env.DB.prepare("SELECT id, article_id, version_no, title_zh, body_zh, zh_hash, title_en, body_en, en_hash, en_source, created_at FROM versions ORDER BY article_id, version_no").all<any>();
-  const jobs = await env.DB.prepare("SELECT article_id, platform, status, stage, public_urls, updated_at FROM publish_jobs ORDER BY article_id, platform").all<any>();
-  const glossary = await env.DB.prepare("SELECT * FROM glossary").all<any>().catch(() => ({ results: [] as any[] }));
-  return JSON.stringify({ articles: articles.results, versions: versions.results, publish_jobs: jobs.results, glossary: glossary.results }, null, 1) + "\n";
+  const articles = await env.DB.prepare(
+    "SELECT id, slug, kind, category, first_published_at, published_version_id FROM articles WHERE published_version_id IS NOT NULL AND first_published_at IS NOT NULL ORDER BY created_at",
+  ).all<any>();
+  const versions = await env.DB.prepare(
+    "SELECT v.id, v.article_id, v.version_no, v.title_zh, v.body_zh, v.zh_hash, v.title_en, v.body_en, v.en_hash, v.created_at FROM versions v JOIN articles a ON a.published_version_id = v.id WHERE a.first_published_at IS NOT NULL ORDER BY a.created_at",
+  ).all<any>();
+  const jobs = await env.DB.prepare(
+    "SELECT j.article_id, j.platform, j.public_urls, j.updated_at FROM publish_jobs j JOIN articles a ON a.id = j.article_id WHERE a.published_version_id IS NOT NULL AND j.status='done' AND j.public_urls IS NOT NULL ORDER BY j.article_id, j.platform",
+  ).all<any>();
+  return JSON.stringify({ articles: articles.results ?? [], versions: versions.results ?? [], publish_jobs: jobs.results ?? [] }, null, 1) + "\n";
 }
 
 /** Run `fn` once per key (e.g. ISO week). Returns true when it ran. */
