@@ -14,6 +14,8 @@ describe("remote reconciliation (read-only)", () => {
     await ins("j3", "bluesky", ["https://bsky.app/x"], { rkeys: ["aaa", "bbb"] });
     await ins("j4", "devto", ["https://dev.to/me/x"], { id: 5 });
     await ins("j5", "medium", ["https://medium.com/@me/x"], null);
+    await ins("j6", "blog", ["https://staging.example/zh/posts/t/"], null); // preview publish: skipped
+    w.env.SITE_URL = "https://site";
     const writes: string[] = [];
     const f = (async (i: any, o: any = {}) => {
       const u = new URL(String(i));
@@ -26,7 +28,8 @@ describe("remote reconciliation (read-only)", () => {
       }
       if (u.host === "public.api.bsky.app") return new Response("{}", { status: u.searchParams.get("rkey") === "bbb" ? 400 : 200 });
       if (u.host === "dev.to" && u.pathname === "/api/articles/me/all") return new Response(JSON.stringify([{ canonical_url: "https://site/en/posts/x/" }, { canonical_url: "https://site/en/posts/x/" }]));
-      if (u.host === "dev.to") return new Response("", { status: 200 });
+      if (u.host === "dev.to") return new Response("", { status: o.headers?.["User-Agent"] ? 200 : 403 });
+      if (u.host === "staging.example") return new Response("", { status: 404 });
       if (m !== "GET") writes.push(String(i));
       return new Response("", { status: 599 });
     }) as any;
@@ -38,6 +41,8 @@ describe("remote reconciliation (read-only)", () => {
     expect(t).toContain("帖子 bbb");
     expect(t).toContain("dev.to 上同一篇文章有 2 份");
     expect(t).not.toContain("medium");
+    expect(t).not.toContain("staging");
+    expect(t).not.toMatch(/devto.*403/);
     expect(writes).toEqual([]);
   });
 });
