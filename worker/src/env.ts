@@ -10,6 +10,8 @@ export interface Env {
   CF_API_TOKEN: string; // Cloudflare token with Pages read (deployment status)
   PREVIEW_SIGNING_KEY: string; // HMAC key for protected preview links
   ADMIN_TOKEN: string; // for /admin/* maintenance endpoints
+  DEVTO_API_KEY?: string;
+  BLUESKY_APP_PASSWORD?: string;
 
   // --- plain vars (wrangler.toml [vars]) ---
   ALLOWED_TELEGRAM_USER_IDS: string; // comma separated numeric ids
@@ -20,6 +22,9 @@ export interface Env {
   SITE_URL: string; // public base URL of the blog, e.g. https://xxx.pages.dev
   WORKER_URL: string; // public base URL of this worker (for preview links)
   PUBLISH_MODE: string; // "preview" (test branch, not production) | "production"
+  ENABLED_PLATFORMS?: string; // e.g. "blog,telegram,devto,bluesky"
+  TELEGRAM_CHANNEL?: string; // @username of the channel
+  BLUESKY_HANDLE?: string;
   AUTO_PUBLISH?: string; // "true": every message from an allowed user is published without an approval step (user asked 2026-11-04)
   DEEPL_MIN_REMAINING: string; // safety margin in chars, e.g. "2000"
 }

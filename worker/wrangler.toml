@@ -24,6 +24,9 @@ SITE_URL = "https://personal-bilingual-blog.pages.dev"
 WORKER_URL = "https://pbb-writer.geochelone666.workers.dev"
 DEEPL_MIN_REMAINING = "2000"
 AUTO_PUBLISH = "true"              # user: "我发了你就给我搞就行" (2026-11-04)
+ENABLED_PLATFORMS = "blog,telegram,devto,bluesky"  # each also needs its credentials
+TELEGRAM_CHANNEL = ""
+BLUESKY_HANDLE = ""
 
 # Secrets (never committed):
 #   TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET DEEPL_API_KEY GITHUB_TOKEN

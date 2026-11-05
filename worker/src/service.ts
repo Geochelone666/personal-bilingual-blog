@@ -1,4 +1,5 @@
-import { Env, PLATFORMS_P0 } from "./env";
+import { Env } from "./env";
+import { enabledPlatforms, postTo, PLATFORM_LABEL, PLATFORM_ORDER } from "./platforms";
 import { sha256Hex, nowIso, randomId, zhHashInput, normalizeBody, makeSlug, backoffSeconds, addSeconds, hmacHex } from "./util";
 import { translateZhToEn, QuotaError, KeyTypeError, deeplUsage } from "./deepl";
 import { runQc } from "./qc";
@@ -57,7 +58,52 @@ export class Service {
   }
   /** The one short failure note the user sees in auto mode. */
   private async failNote(chatId: number, articleId: string, what: string) {
-    await this.tg.sendHtml(chatId, `❌ 《${esc(await this.titleOf(articleId))}》未发布\n博客 · 中文：未成功\n博客 · English：未成功\n<i>${esc(what.slice(0, 200))}</i>`);
+    const lines = enabledPlatforms(this.env).map((p) => `${PLATFORM_LABEL[p] ?? p}：未成功`).join("\n");
+    await this.tg.sendHtml(chatId, `❌ 《${esc(await this.titleOf(articleId))}》未发布\n${lines}\n<i>${esc(what.slice(0, 200))}</i>`);
+  }
+
+  /** Auto mode: one receipt per approval, once every platform job has finished. */
+  async maybeReceipt(approvalId: string) {
+    if (!this.auto) return;
+    const jobs = (await this.db().prepare("SELECT * FROM publish_jobs WHERE approval_id=?").bind(approvalId).all<any>()).results ?? [];
+    if (!jobs.length || jobs.some((j) => j.status === "active")) return;
+    const ins = await this.db()
+      .prepare("INSERT INTO publish_events (job_id, stage, ok, detail, at) SELECT ?, 'receipt', 1, '', ? WHERE NOT EXISTS (SELECT 1 FROM publish_events WHERE job_id=? AND stage='receipt')")
+      .bind(approvalId, nowIso(), approvalId)
+      .run();
+    if (!ins.meta.changes) return;
+    const a = (await this.article(jobs[0].article_id))!;
+    const ap = await this.db().prepare("SELECT version_id FROM approvals WHERE id=?").bind(approvalId).first<any>();
+    const v = (await this.version(ap.version_id))!;
+    jobs.sort((x, y) => PLATFORM_ORDER.indexOf(x.platform) - PLATFORM_ORDER.indexOf(y.platform));
+    const ok = jobs.filter((j) => j.status === "done").length;
+    const head = ok === jobs.length ? "✅" : ok ? "⚠️" : "❌";
+    const lines = jobs.map((j) => {
+      const label = PLATFORM_LABEL[j.platform] ?? j.platform;
+      if (j.status !== "done") return `${label}：未成功`;
+      const urls: string[] = JSON.parse(j.public_urls || "[]");
+      if (j.platform === "blog") return `${label}：<a href="${esc(urls[0])}">中文</a> · <a href="${esc(urls[1])}">English</a>`;
+      return `${label}：<a href="${esc(urls[0])}">${esc(urls[0].replace(/^https?:\/\//, ""))}</a>`;
+    });
+    await this.tg.sendHtml(a.created_by, `${head} 《${esc(v.title_zh)}》${ok === jobs.length ? "已发布" : ok ? "部分发布" : "未发布"}\n${lines.join("\n")}`);
+  }
+
+  /** Cross-post to a non-blog platform once the blog itself is live (its URL is the canonical link). */
+  async advanceCross(job: any) {
+    const blog = await this.db().prepare("SELECT * FROM publish_jobs WHERE approval_id=? AND platform='blog'").bind(job.approval_id).first<any>();
+    if (!blog || blog.status === "failed" || blog.status === "cancelled") {
+      await this.db().prepare("UPDATE publish_jobs SET status='failed', last_error=?, updated_at=? WHERE id=?").bind("博客未发布，跳过", nowIso(), job.id).run();
+      return this.maybeReceipt(job.approval_id);
+    }
+    if (blog.status !== "done") return this.wait(job, 20, "waiting for blog");
+    const ap = await this.db().prepare("SELECT * FROM approvals WHERE id=?").bind(job.approval_id).first<any>();
+    const v = (await this.version(ap.version_id))!;
+    if (v.zh_hash !== ap.zh_hash || v.en_hash !== ap.en_hash) throw new Error("版本内容与审批不一致，拒绝发布");
+    const [zhUrl, enUrl] = JSON.parse(blog.public_urls);
+    const url = await postTo(job.platform, this.env, { articleId: job.article_id, titleZh: v.title_zh, bodyZh: v.body_zh, titleEn: v.title_en!, bodyEn: v.body_en!, zhUrl, enUrl }, this.fetcher);
+    await this.event(job.id, `${job.platform}_post`, true, { url });
+    await this.db().prepare("UPDATE publish_jobs SET stage='verified', status='done', public_urls=?, last_error=NULL, updated_at=? WHERE id=?").bind(JSON.stringify([url]), nowIso(), job.id).run();
+    await this.maybeReceipt(job.approval_id);
   }
 
   db() {
@@ -231,7 +277,7 @@ export class Service {
   async sendReview(versionId: string, chatId: number) {
     const v = (await this.version(versionId))!;
     const a = (await this.article(v.article_id))!;
-    const platforms = canonicalPlatforms(PLATFORMS_P0);
+    const platforms = canonicalPlatforms(enabledPlatforms(this.env));
     const hash = await approvalHash(v.id, v.zh_hash, v.en_hash!, platforms);
     const qc = v.qc_json ? JSON.parse(v.qc_json) : null;
     const qcLine = qc ? (qc.issues.length ? `翻译检查：${qc.issues.length} 项提示\n- ${qc.issues.map((i: any) => i.detail).join("\n- ")}` : "翻译检查：未发现问题") : "";
@@ -259,7 +305,7 @@ export class Service {
     const v = await this.version(versionId);
     const a = v ? await this.article(v.article_id) : null;
     if (!v || !a || !v.en_hash) return false;
-    const h = await approvalHash(v.id, v.zh_hash, v.en_hash, canonicalPlatforms(PLATFORMS_P0));
+    const h = await approvalHash(v.id, v.zh_hash, v.en_hash, canonicalPlatforms(enabledPlatforms(this.env)));
     const res = await this.approve(Number(a.created_by), chatId, v.id, h.slice(0, 16));
     if (res !== "已批准") {
       await this.failNote(chatId, a.id, res);
@@ -275,7 +321,7 @@ export class Service {
     if (!v || !a) return "版本不存在";
 
     // Idempotent: a repeated click on an already-accepted approval returns its status.
-    const platforms = canonicalPlatforms(PLATFORMS_P0);
+    const platforms = canonicalPlatforms(enabledPlatforms(this.env));
     if (v.en_hash) {
       const h = await approvalHash(v.id, v.zh_hash, v.en_hash, platforms);
       const existing = await this.db().prepare("SELECT id FROM approvals WHERE approval_hash=?").bind(h).first();
@@ -287,7 +333,7 @@ export class Service {
       article: a,
       version: v,
       platforms,
-      allowedPlatforms: PLATFORMS_P0,
+      allowedPlatforms: enabledPlatforms(this.env),
     });
     if (!res.ok) return res.reason;
 
@@ -344,7 +390,10 @@ export class Service {
     if (failed) {
       await this.db().prepare("UPDATE articles SET status='publish_failed', updated_at=? WHERE id=?").bind(nowIso(), job.article_id).run();
       const a = await this.article(job.article_id);
-      if (a && this.auto) await this.failNote(a.created_by, a.id, msg);
+      if (a && this.auto) {
+        if (job.platform === "blog") await this.db().prepare("UPDATE publish_jobs SET status='failed', last_error='博客未发布，跳过', updated_at=? WHERE approval_id=? AND status='active'").bind(nowIso(), job.approval_id).run();
+        await this.maybeReceipt(job.approval_id);
+      }
       else if (a) await this.tg.send(a.created_by, `❌ 发布失败（${job.platform}，阶段 ${job.stage} 之后）：${msg}\n原稿和已完成的步骤都已保存。发送 /retry ${job.article_id} 从断点继续。`);
     }
   }
@@ -354,7 +403,7 @@ export class Service {
   }
 
   async advanceJob(job: any) {
-    if (job.platform !== "blog") throw new Error(`P0 不支持平台 ${job.platform}`);
+    if (job.platform !== "blog") return this.advanceCross(job);
     const ap = await this.db().prepare("SELECT * FROM approvals WHERE id=?").bind(job.approval_id).first<any>();
     const v = ap ? await this.version(ap.version_id) : null;
     const a = await this.article(job.article_id);
@@ -430,9 +479,7 @@ export class Service {
           .prepare("UPDATE articles SET status=CASE WHEN current_version_id=? THEN 'published' ELSE status END, published_version_id=?, updated_at=? WHERE id=?")
           .bind(v.id, v.id, nowIso(), a.id),
       ]);
-      if (this.auto) {
-        return this.tg.sendHtml(a.created_by, `✅ 《${esc(v.title_zh)}》已发布\n<a href="${esc(urls[0])}">博客 · 中文</a>\n<a href="${esc(urls[1])}">博客 · English</a>`);
-      }
+      if (this.auto) return this.maybeReceipt(job.approval_id);
       await this.tg.send(a.created_by, `③ 公开页面验证成功 ✅（${env === "production" ? "生产" : "预览环境"}）\n中文：${urls[0]}\n英文：${urls[1]}`);
     }
   }

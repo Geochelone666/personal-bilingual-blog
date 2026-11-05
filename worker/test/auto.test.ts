@@ -40,3 +40,44 @@ describe("auto publish mode", () => {
     expect(r.body_zh.length).toBe(4003);
   });
 });
+
+describe("P1 cross-posting", () => {
+  it("blog first, then Telegram channel + dev.to; one combined receipt; failures marked 未成功", async () => {
+    const w = makeWorld();
+    Object.assign(w.env, { AUTO_PUBLISH: "true", ENABLED_PLATFORMS: "blog,telegram,devto,bluesky", TELEGRAM_CHANNEL: "@chan", DEVTO_API_KEY: "k" });
+    const base = (globalThis as any).fetch;
+    let devtoPosts = 0;
+    let chanPosts = 0;
+    (globalThis as any).fetch = async (input: any, init: any = {}) => {
+      const url = new URL(typeof input === "string" ? input : input.url);
+      if (url.host === "dev.to") {
+        if (url.pathname === "/api/articles/me/all") return new Response("[]", { status: 200 });
+        devtoPosts++;
+        return new Response(JSON.stringify({ error: "boom" }), { status: 422 });
+      }
+      if (url.host === "api.telegram.org" && url.pathname.endsWith("/sendMessage")) {
+        const b = JSON.parse(init.body);
+        if (b.chat_id === "@chan") {
+          chanPosts++;
+          return new Response(JSON.stringify({ ok: true, result: { message_id: 7, chat: { id: -1001, username: "chan" } } }));
+        }
+      }
+      return base(input, init);
+    };
+    await w.text("标题\n正文内容。");
+    const jobs = (await w.DB.prepare("SELECT platform FROM publish_jobs ORDER BY platform").all<any>()).results.map((j: any) => j.platform);
+    expect(jobs).toEqual(["blog", "devto", "telegram"]); // bluesky not configured -> not enabled
+    for (let i = 0; i < 40; i++) {
+      await w.DB.prepare("UPDATE publish_jobs SET next_attempt_at=NULL").run();
+      await w.tick();
+    }
+    expect(chanPosts).toBe(1);
+    expect(devtoPosts).toBeGreaterThan(1); // retried
+    const rec = w.texts().filter((t) => t.includes("《标题》"));
+    expect(rec.length).toBe(1);
+    expect(rec[0]).toContain("⚠️ 《标题》部分发布");
+    expect(rec[0]).toContain('Telegram 频道：<a href="https://t.me/chan/7">');
+    expect(rec[0]).toContain("dev.to：未成功");
+    (globalThis as any).fetch = base;
+  });
+});
