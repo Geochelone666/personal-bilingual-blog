@@ -67,3 +67,26 @@ describe("public content backup", () => {
     expect(output).not.toHaveProperty("glossary");
   });
 });
+
+describe("public content backup (real schema)", () => {
+  it("after publishing v1 and editing to an unapproved v2, only v1 is exported", async () => {
+    const { makeWorld } = await import("./world");
+    const w = makeWorld();
+    await w.text("#文章\n公开标题\n这是已经公开的正文，用来测试备份。\n\n- 第一点\n- 第二点");
+    await w.click(w.lastButtons().find((b) => b.startsWith("ap:"))!);
+    await w.tick(6);
+    const a: any = await w.DB.prepare("SELECT id, status FROM articles").first();
+    expect(a.status).toBe("published");
+    await w.text(`/edit ${a.id}`);
+    await w.text("公开标题\n这是尚未审核的私人修订草稿 SECRET-DRAFT。");
+    await w.text("#想法\n未批准的短想法 SECRET-QUICK");
+    const out = await buildBackup(w.env);
+    expect(out).not.toContain("SECRET-DRAFT");
+    expect(out).not.toContain("SECRET-QUICK");
+    const j = JSON.parse(out);
+    expect(j.articles.map((x: any) => x.id)).toEqual([a.id]);
+    expect(j.versions).toHaveLength(1);
+    expect(j.versions[0].body_zh).toContain("已经公开的正文");
+    expect(out).not.toMatch(/created_by|approved_by|7704621098|telegram_user/);
+  });
+});
