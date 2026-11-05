@@ -1,3 +1,4 @@
+import { recordHit, collectStats, weekly, buildBackup } from "./p3";
 import { Env, allowedUsers } from "./env";
 import { Service } from "./service";
 import { hmacHex, safeEqual, nowIso, splitTitleBody } from "./util";
@@ -18,6 +19,7 @@ const HELP = `个人双语博客 · 写作 Bot
 /en <编号> 修改英文译稿（下一条消息为完整英文稿）
 /retranslate <编号> 重新翻译
 /retry <编号> 发布失败后从断点继续
+/stats [天数] 数据统计（默认 7 天）
 /quota 查看 DeepL 免费额度
 /term 中文=English 添加术语
 /terms 查看术语表
@@ -31,6 +33,7 @@ export default {
     try {
       if (req.method === "POST" && url.pathname === "/telegram/webhook") return await webhook(req, env, ctx);
       if (req.method === "GET" && url.pathname.startsWith("/preview/")) return await preview(url, env);
+      if (url.pathname === "/hit" && (req.method === "POST" || req.method === "GET")) return await recordHit(env, url);
       if (url.pathname.startsWith("/admin/")) return await admin(req, url, env);
       if (url.pathname === "/") return new Response("ok", { headers: { "X-Robots-Tag": "noindex" } });
       return new Response("not found", { status: 404 });
@@ -44,6 +47,7 @@ export default {
     ctx.waitUntil((async () => {
       if (env.AUTO_PUBLISH === "true") await autoHousekeeping(env);
       await new Service(env).processDueJobs();
+      await weekly(env).catch((e) => console.error("weekly", e));
     })());
   },
 };
@@ -164,6 +168,8 @@ async function handleUpdate(update: any, env: Env) {
         return arg ? retranslate(svc, arg, chatId) : svc.tg.send(chatId, "用法：/retranslate <编号>");
       case "/retry":
         return svc.tg.send(chatId, arg ? await svc.retry(arg) : "用法：/retry <编号>");
+      case "/stats":
+        return svc.tg.send(chatId, await collectStats(env, Number(arg) > 0 ? Math.min(Number(arg), 90) : 7));
       case "/quota":
         return svc.tg.send(chatId, await svc.quota());
       case "/term": {
@@ -284,12 +290,13 @@ async function admin(req: Request, url: URL, env: Env): Promise<Response> {
     await svc.tg.call("setMyCommands", {
       commands: [
         ["new", "开始长文投稿"], ["done", "完成长文投稿"], ["list", "最近文章"], ["status", "查看状态"], ["edit", "修改中文"],
-        ["en", "修改英文"], ["retranslate", "重新翻译"], ["retry", "失败后继续发布"], ["quota", "DeepL 额度"], ["help", "帮助"],
+        ["en", "修改英文"], ["retranslate", "重新翻译"], ["retry", "失败后继续发布"], ["stats", "数据统计"], ["quota", "DeepL 额度"], ["help", "帮助"],
       ].map(([command, description]) => ({ command, description })),
     });
     return json({ setWebhook: r });
   }
 
+  if (url.pathname === "/admin/backup-preview") return new Response(await buildBackup(env), { headers: { "Content-Type": "application/json" } });
   if (url.pathname === "/admin/health") {
     const out: Record<string, unknown> = {};
     const step = async (k: string, f: () => Promise<unknown>) => {

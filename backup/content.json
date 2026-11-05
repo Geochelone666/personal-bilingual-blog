@@ -1,0 +1,164 @@
+{
+ "exported_at": "2026-11-05T19:30:37.763099Z",
+ "articles": [
+  {
+   "id": "a_20261104_04e296cb1c3b",
+   "slug": "2026-11-04-test-draft-first-end-to-end-test",
+   "status": "published",
+   "current_version_id": "v_20261104_c23fd8ae8ccd",
+   "first_published_at": "2026-11-04T23:15:18.298Z",
+   "created_at": "2026-11-04T18:42:59.298Z",
+   "updated_at": "2026-11-04T23:17:19.375Z"
+  },
+  {
+   "id": "a_20261105_9487951b59db",
+   "slug": "2026-11-05-cutting-edge-retro-programmers",
+   "status": "published",
+   "current_version_id": "v_20261105_8b85fc494aaa",
+   "first_published_at": "2026-11-05T05:18:38.909Z",
+   "created_at": "2026-11-05T05:18:36.119Z",
+   "updated_at": "2026-11-05T05:21:20.175Z"
+  },
+  {
+   "id": "a_20261105_97e40a9e8b65",
+   "slug": "2026-11-05-the-ai-revolution-may-survive-will-tech-stocks",
+   "status": "published",
+   "current_version_id": "v_20261105_20378d5b11b2",
+   "first_published_at": "2026-11-05T17:35:55.209Z",
+   "created_at": "2026-11-05T17:35:49.873Z",
+   "updated_at": "2026-11-05T18:22:20.272Z"
+  }
+ ],
+ "versions": [
+  {
+   "id": "v_20261104_c23fd8ae8ccd",
+   "article_id": "a_20261104_04e296cb1c3b",
+   "version_no": 1,
+   "title_zh": "【测试稿】第一次端到端测试",
+   "body_zh": "这是一篇只用于验证发布流程的测试文章。它会经过 DeepL 翻译、人工审核，然后只发布到 staging 预览站，不会进入正式博客。\n\n如果你能在预览站看到中英文两个版本，说明整条链路已经跑通。",
+   "zh_hash": "9ed22dd5d4d18e5cfa89ec7cd940b46806ee54b785b95f3b2cbb381baeec9fcd",
+   "title_en": "[Test Draft] First End-to-End Test",
+   "body_en": "This is a test post intended solely to verify the publishing process. It will be translated by DeepL, manually reviewed, and then published only to the staging preview site; it will not appear on the live blog.\n\nIf you can see both the Chinese and English versions on the preview site, it means the entire process has been successfully completed.",
+   "en_hash": "95b16f42d49de87e1db084897a0517369d8c70726ca068640781b3c307c8d6f0",
+   "en_source": "deepl",
+   "created_at": "2026-11-04T18:42:59.391Z"
+  },
+  {
+   "id": "v_20261105_8b85fc494aaa",
+   "article_id": "a_20261105_9487951b59db",
+   "version_no": 1,
+   "title_zh": "前沿的复古编程者",
+   "body_zh": "我是一个计算机学生，为什么要做blog呢？因为想要搞一些复古的东西。虽然在以前blog还是潮流，但在科技的发展下，blog已经成为一种考古版的网站了。我总是会去看看别人一起做的的blog，就像是挖宝藏一样。看看当年的年轻人做新颖的blog慢慢变旧。版主也随着时代迎来职业高光，然后突然间被ai冲击。ai作为一个蹦着取代程序员的技术革命，就像是纺织机取代缝纫工，火车去掉马夫。总以为工业化，效率提升是好事。但现在才体会到手工创作这些的趣味。虽然在那个时代，大部分纺织工人是为了赚钱而去做这个工作，但也有一部分人可能是真的享受纺织这个过程。工业化会给整个社会更普遍的产品（如大量制式衣服，公共火车，以及越来越简单的编程）。但从这个过程获得乐趣的人依然存在，虽然现在的人做纺织或骑马再也获得不了什么金钱。但作为兴趣仍然存在。只是可怜蹦着高收入而去学习计算机的人。总而言之，我也享受编程的乐趣，就让我作为一个前沿的复古男孩吧:)",
+   "zh_hash": "7e5daaa747d842ec8d9b8b0bbfadef436b6ff1ae015f3c02494a4150a58f3df4",
+   "title_en": "Cutting-Edge Retro Programmers",
+   "body_en": "I’m a computer science student, so why start a blog? Because I want to do something retro. Blogs used to be all the rage, but as technology moved on, they have turned into a kind of “archaeological” website. I often browse blogs other people made years ago, and it feels like digging for treasure: you get to watch the fresh, inventive blogs that young people built back then slowly grow old.\n\nWebmasters, too, had their professional heyday as the times changed, only to be suddenly hit by AI. AI is a technological revolution aimed squarely at replacing programmers, much like textile machines replaced seamstresses and trains put coachmen out of work.\n\nI always assumed industrialization and higher efficiency were good things. Only now do I appreciate the joy of making things by hand. In that era, most textile workers did the job to earn a living, but some of them probably truly enjoyed the craft of weaving. Industrialization gives society more widely available products (mass-produced standard clothing, public trains, and ever-simpler programming).\n\nBut people who find joy in the process still exist. Weaving or riding horses no longer earns anyone much money these days, yet both live on as hobbies. I just feel sorry for those who rushed into computer science purely for the high pay. All in all, I enjoy programming for its own sake, so let me be a cutting-edge retro guy :)",
+   "en_hash": "58beff368dfc3f158d909839f8eeb365016aae278896fbaab503bb44271619af",
+   "en_source": "deepl+proofread",
+   "created_at": "2026-11-05T05:18:36.174Z"
+  },
+  {
+   "id": "v_20261105_20378d5b11b2",
+   "article_id": "a_20261105_97e40a9e8b65",
+   "version_no": 1,
+   "title_zh": "AI 革命或许能挺过去，科技股呢？",
+   "body_zh": "在编程之外，我还做股票投资。最近密集发生一堆大事，中期选举，美联储加息，ant上市。对我来说，我喜好技术，偏爱科技公司。也更了解科技公司。但不是所有人都喜欢科技进步。科技发展这件事本身很酷，但是随之而来的对各行各业的打击才是大家所担心的。看起来特朗普让美国再次伟大的方式是开商业的领先，但民主党显然不这么认为。中期选举民主党大获全胜。已经美联储构想的新架构（市场自我调节，不救市，不指引）。使这次技术革命比以往更加混乱。ant目前的情况看起来显然支撑不起他们想要的估值，难道他们内部还有秘密武器？（但这也踩到了民主党的雷点上）。这么多因素叠加看起来就好像不像让科技股好受。这么多因素叠加很有可能造成恐慌性抛售，但这会是ai泡沫破碎吗？我认为还没到时候，ai泡沫真正破碎的大跌一定比这次惨烈地多。",
+   "zh_hash": "21b20acfae719709fb568021cedec02e09bbe3fb390a993754305427cca8c4e3",
+   "title_en": "The AI Revolution May Survive. Will Tech Stocks?",
+   "body_en": "Besides programming, I also invest in stocks. A string of big events has landed recently: the midterm elections, the Fed’s rate hike, and Anthropic’s IPO. Personally, I love technology and favor tech companies, which I also understand better. But not everyone welcomes technological progress. Technological progress is cool in itself; what worries people is the blow it deals to every industry along the way. Trump’s way of “Making America Great Again” seems to rest on leadership in business, but the Democrats clearly don’t see it that way.\n\nThe Democrats won a sweeping victory in the midterms. Add the Fed’s new framework (let the market regulate itself, no bailouts, no guidance), and this technological revolution is more chaotic than any before it. Anthropic’s current situation clearly can’t support the valuation it wants. Could it have a secret weapon in-house? (Though that would also step on a Democratic landmine.)\n\nWith so many factors piling up, tech stocks don’t look set for an easy ride. Together they could well trigger a panic sell-off, but will this be the AI bubble bursting? I don’t think it’s time yet. The crash that truly marks the bursting of the AI bubble will surely be far more brutal than this one.",
+   "en_hash": "2e968981638a498167af940877d45a112cbf26e2d245848695dbffa0ac354e88",
+   "en_source": "deepl+proofread",
+   "created_at": "2026-11-05T17:35:50.094Z"
+  }
+ ],
+ "publish_jobs": [
+  {
+   "article_id": "a_20261104_04e296cb1c3b",
+   "platform": "blog",
+   "status": "done",
+   "stage": "verified",
+   "public_urls": "[\"https://staging.personal-bilingual-blog.pages.dev/zh/posts/2026-11-04-test-draft-first-end-to-end-test/\",\"https://staging.personal-bilingual-blog.pages.dev/en/posts/2026-11-04-test-draft-first-end-to-end-test/\"]",
+   "updated_at": "2026-11-04T23:17:19.375Z"
+  },
+  {
+   "article_id": "a_20261105_9487951b59db",
+   "platform": "blog",
+   "status": "done",
+   "stage": "verified",
+   "public_urls": "[\"https://personal-bilingual-blog.pages.dev/zh/posts/2026-11-05-cutting-edge-retro-programmers/\",\"https://personal-bilingual-blog.pages.dev/en/posts/2026-11-05-cutting-edge-retro-programmers/\"]",
+   "updated_at": "2026-11-05T05:21:20.175Z"
+  },
+  {
+   "article_id": "a_20261105_9487951b59db",
+   "platform": "bluesky",
+   "status": "done",
+   "stage": "verified",
+   "public_urls": "[\"https://bsky.app/profile/yanzhou05.bsky.social/post/3mzljxnimyz2q\"]",
+   "updated_at": "2026-11-05T18:51:20.299Z"
+  },
+  {
+   "article_id": "a_20261105_9487951b59db",
+   "platform": "devto",
+   "status": "done",
+   "stage": "verified",
+   "public_urls": "[\"https://dev.to/inkward/cutting-edge-retro-programmers-28nf\"]",
+   "updated_at": "2026-11-05T19:04:20.555Z"
+  },
+  {
+   "article_id": "a_20261105_9487951b59db",
+   "platform": "telegram",
+   "status": "done",
+   "stage": "verified",
+   "public_urls": "[\"https://t.me/inkward_zh/6\"]",
+   "updated_at": "2026-11-05T16:31:39.341Z"
+  },
+  {
+   "article_id": "a_20261105_9487951b59db",
+   "platform": "telegram_en",
+   "status": "done",
+   "stage": "verified",
+   "public_urls": "[\"https://t.me/inkward_en/2\"]",
+   "updated_at": "2026-11-05T16:46:34.036Z"
+  },
+  {
+   "article_id": "a_20261105_97e40a9e8b65",
+   "platform": "blog",
+   "status": "done",
+   "stage": "verified",
+   "public_urls": "[\"https://personal-bilingual-blog.pages.dev/zh/posts/2026-11-05-the-ai-revolution-may-survive-will-tech-stocks/\",\"https://personal-bilingual-blog.pages.dev/en/posts/2026-11-05-the-ai-revolution-may-survive-will-tech-stocks/\"]",
+   "updated_at": "2026-11-05T18:22:20.272Z"
+  },
+  {
+   "article_id": "a_20261105_97e40a9e8b65",
+   "platform": "bluesky",
+   "status": "done",
+   "stage": "verified",
+   "public_urls": "[\"https://bsky.app/profile/yanzhou05.bsky.social/post/3mzljxpbndi2z\"]",
+   "updated_at": "2026-11-05T18:51:22.624Z"
+  },
+  {
+   "article_id": "a_20261105_97e40a9e8b65",
+   "platform": "devto",
+   "status": "cancelled",
+   "stage": "queued",
+   "public_urls": null,
+   "updated_at": "2026-11-05T17:35:59.151Z"
+  },
+  {
+   "article_id": "a_20261105_97e40a9e8b65",
+   "platform": "telegram",
+   "status": "done",
+   "stage": "verified",
+   "public_urls": "[\"https://t.me/inkward_zh/8\"]",
+   "updated_at": "2026-11-05T18:22:26.902Z"
+  },
+  {
+   "article_id": "a_20261105_97e40a9e8b65",
+   "platform": "telegram_en",
+   "status": "done",
+   "stage": "verified",
+   "public_urls": "[\"https://t.me/inkward_en/4\"]",
+   "updated_at": "2026-11-05T18:22:29.321Z"
+  }
+ ],
+ "glossary": []
+}

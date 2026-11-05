@@ -2,6 +2,7 @@ name: Deploy blog to Cloudflare Pages
 on:
   push:
     branches: [main, staging]
+    paths-ignore: ['backup/**', 'worker/**', 'docs/**']
   workflow_dispatch:
 concurrency:
   group: pages-${{ github.ref_name }}
