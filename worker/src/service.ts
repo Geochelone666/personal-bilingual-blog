@@ -3,7 +3,7 @@ import { sha256Hex, nowIso, randomId, zhHashInput, normalizeBody, makeSlug, back
 import { translateZhToEn, QuotaError, KeyTypeError, deeplUsage } from "./deepl";
 import { runQc } from "./qc";
 import { approvalHash, checkApproval, canonicalPlatforms, idempotencyKey } from "./approval";
-import { Telegram, kb } from "./telegram";
+import { Telegram, kb, esc } from "./telegram";
 import { GitHub } from "./github";
 import { findDeployment, retryDeployment, verifyPublicUrl } from "./pages";
 import { renderPostFile, postPath, publicPostUrl } from "./render";
@@ -44,6 +44,22 @@ export class Service {
   }
 
   // ---------- data access ----------
+  get auto(): boolean {
+    return this.env.AUTO_PUBLISH === "true";
+  }
+  /** Progress chatter; silent in auto mode. */
+  private async say(chatId: number, text: string) {
+    if (!this.auto) await this.tg.send(chatId, text);
+  }
+  private async titleOf(articleId: string): Promise<string> {
+    const r = await this.db().prepare("SELECT v.title_zh t FROM articles a JOIN versions v ON v.id=a.current_version_id WHERE a.id=?").bind(articleId).first<any>();
+    return r?.t ?? articleId;
+  }
+  /** The one short failure note the user sees in auto mode. */
+  private async failNote(chatId: number, articleId: string, what: string) {
+    await this.tg.sendHtml(chatId, `❌ 《${esc(await this.titleOf(articleId))}》未发布\n博客 · 中文：未成功\n博客 · English：未成功\n<i>${esc(what.slice(0, 200))}</i>`);
+  }
+
   db() {
     return this.env.DB;
   }
@@ -73,7 +89,7 @@ export class Service {
       .bind(id, slug, "draft", userId, now, now)
       .run();
     const vid = await this.insertVersion(id, titleZh, normalizeBody(bodyZh), zhHash, null);
-    await this.tg.send(chatId, `中文原稿已保存 ✅\n编号：${id}\n版本：v1（${zhHash.slice(0, 8)}）\n正在翻译英文…`);
+    await this.say(chatId, `中文原稿已保存 ✅\n编号：${id}\n版本：v1（${zhHash.slice(0, 8)}）\n正在翻译英文…`);
     await this.translateAndReview(vid, chatId);
     return id;
   }
@@ -175,7 +191,9 @@ export class Service {
         this.db().prepare("UPDATE articles SET status='in_review', updated_at=? WHERE id=?").bind(nowIso(), v.article_id),
       ]);
       await this.maybeRefreshSlug(v.article_id, title, v.zh_hash);
-      await this.sendReview(versionId, chatId);
+      if (this.auto) {
+        if (await this.autoApprove(versionId, chatId)) await this.processDueJobs();
+      } else await this.sendReview(versionId, chatId);
     } catch (e: any) {
       const paused = e instanceof QuotaError || e instanceof KeyTypeError;
       await this.db().batch([
@@ -184,6 +202,7 @@ export class Service {
           .bind(paused ? "paused_quota" : "failed", String(e?.message ?? e), versionId),
         this.db().prepare("UPDATE articles SET status=?, updated_at=? WHERE id=?").bind(paused ? "translation_paused" : "translation_failed", nowIso(), v.article_id),
       ]);
+      if (this.auto) return this.failNote(chatId, v.article_id, `翻译${paused ? "额度不足" : "失败"}：${e?.message ?? e}`);
       await this.tg.send(
         chatId,
         `${paused ? "⏸ 翻译已暂停" : "⚠️ 翻译失败"}：${e?.message ?? e}\n中文原稿已安全保存（${v.article_id}）。\n` +
@@ -235,6 +254,20 @@ export class Service {
     });
   }
 
+  /** Auto mode: the user's own message is the approval (asked for 2026-11-04). */
+  async autoApprove(versionId: string, chatId: number): Promise<boolean> {
+    const v = await this.version(versionId);
+    const a = v ? await this.article(v.article_id) : null;
+    if (!v || !a || !v.en_hash) return false;
+    const h = await approvalHash(v.id, v.zh_hash, v.en_hash, canonicalPlatforms(PLATFORMS_P0));
+    const res = await this.approve(Number(a.created_by), chatId, v.id, h.slice(0, 16));
+    if (res !== "已批准") {
+      await this.failNote(chatId, a.id, res);
+      return false;
+    }
+    return true;
+  }
+
   // ---------- approval ----------
   async approve(userId: number, chatId: number, versionId: string, hashPrefix: string): Promise<string> {
     const v = await this.version(versionId);
@@ -276,7 +309,7 @@ export class Service {
       );
     }
     await this.db().batch(stmts);
-    await this.tg.send(chatId, `已批准 ${a.id} v${v.version_no}（审批哈希 ${res.hash.slice(0, 12)}）。开始发布，完成验证后会把链接发给你。`);
+    await this.say(chatId, `已批准 ${a.id} v${v.version_no}（审批哈希 ${res.hash.slice(0, 12)}）。开始发布，完成验证后会把链接发给你。`);
     return "已批准";
   }
 
@@ -311,7 +344,8 @@ export class Service {
     if (failed) {
       await this.db().prepare("UPDATE articles SET status='publish_failed', updated_at=? WHERE id=?").bind(nowIso(), job.article_id).run();
       const a = await this.article(job.article_id);
-      if (a) await this.tg.send(a.created_by, `❌ 发布失败（${job.platform}，阶段 ${job.stage} 之后）：${msg}\n原稿和已完成的步骤都已保存。发送 /retry ${job.article_id} 从断点继续。`);
+      if (a && this.auto) await this.failNote(a.created_by, a.id, msg);
+      else if (a) await this.tg.send(a.created_by, `❌ 发布失败（${job.platform}，阶段 ${job.stage} 之后）：${msg}\n原稿和已完成的步骤都已保存。发送 /retry ${job.article_id} 从断点继续。`);
     }
   }
 
@@ -358,7 +392,7 @@ export class Service {
         .bind(sha, addSeconds(nowIso(), 45), nowIso(), job.id)
         .run();
       if (!a.first_published_at) await this.db().prepare("UPDATE articles SET first_published_at=? WHERE id=?").bind(date, a.id).run();
-      await this.tg.send(a.created_by, `① GitHub 提交成功：${sha.slice(0, 7)}（${branch}）。等待 Cloudflare Pages 构建…`);
+      await this.say(a.created_by, `① GitHub 提交成功：${sha.slice(0, 7)}（${branch}）。等待 Cloudflare Pages 构建…`);
       return;
     }
 
@@ -381,7 +415,7 @@ export class Service {
         .prepare("UPDATE publish_jobs SET stage='deployed', deployment_id=?, deployment_url=?, attempts=0, last_error=NULL, next_attempt_at=?, updated_at=? WHERE id=?")
         .bind(d.id, base, nowIso(), nowIso(), job.id)
         .run();
-      await this.tg.send(a.created_by, `② Pages 部署成功：${d.url}\n正在验证公开页面…`);
+      await this.say(a.created_by, `② Pages 部署成功：${d.url}\n正在验证公开页面…`);
       return;
     }
 
@@ -396,6 +430,9 @@ export class Service {
           .prepare("UPDATE articles SET status=CASE WHEN current_version_id=? THEN 'published' ELSE status END, published_version_id=?, updated_at=? WHERE id=?")
           .bind(v.id, v.id, nowIso(), a.id),
       ]);
+      if (this.auto) {
+        return this.tg.sendHtml(a.created_by, `✅ 《${esc(v.title_zh)}》已发布\n<a href="${esc(urls[0])}">博客 · 中文</a>\n<a href="${esc(urls[1])}">博客 · English</a>`);
+      }
       await this.tg.send(a.created_by, `③ 公开页面验证成功 ✅（${env === "production" ? "生产" : "预览环境"}）\n中文：${urls[0]}\n英文：${urls[1]}`);
     }
   }

@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  AI?: any; // Workers AI binding (title generation)
 
   // --- secrets (wrangler secret put / dashboard) ---
   TELEGRAM_BOT_TOKEN: string;
@@ -19,6 +20,7 @@ export interface Env {
   SITE_URL: string; // public base URL of the blog, e.g. https://xxx.pages.dev
   WORKER_URL: string; // public base URL of this worker (for preview links)
   PUBLISH_MODE: string; // "preview" (test branch, not production) | "production"
+  AUTO_PUBLISH?: string; // "true": every message from an allowed user is published without an approval step (user asked 2026-11-04)
   DEEPL_MIN_REMAINING: string; // safety margin in chars, e.g. "2000"
 }
 

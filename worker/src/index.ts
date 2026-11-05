@@ -3,6 +3,7 @@ import { Service } from "./service";
 import { hmacHex, safeEqual, nowIso, splitTitleBody } from "./util";
 import { renderPreviewHtml } from "./render";
 import { deeplUsage } from "./deepl";
+import { userTitle, generateTitle } from "./autotitle";
 
 const HELP = `个人双语博客 · 写作 Bot
 
@@ -39,7 +40,10 @@ export default {
   },
 
   async scheduled(_ev: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(new Service(env).processDueJobs());
+    ctx.waitUntil((async () => {
+      if (env.AUTO_PUBLISH === "true") await autoHousekeeping(env);
+      await new Service(env).processDueJobs();
+    })());
   },
 };
 
@@ -114,6 +118,13 @@ async function handleUpdate(update: any, env: Env) {
   }
   if (!text) return svc.tg.send(chatId, "目前只接受文字或 .md/.txt 文件");
 
+  if (env.AUTO_PUBLISH === "true" && !text.startsWith("/") && !["edit_zh", "edit_en", "collect_new"].includes(mode)) {
+    return autoPost(env, svc, userId, chatId, text, state);
+  }
+  if (env.AUTO_PUBLISH === "true" && (text.trim() === "/start" || text.trim() === "/help")) {
+    return svc.tg.send(chatId, "直接发文字就行，我会翻译成中英双语并发布。\n第一行想写标题就写（短短一行），不写我来起。\n发布后告诉你发到了哪里。");
+  }
+
   if (text.startsWith("/")) {
     const [cmdRaw, ...rest] = text.trim().split(/\s+/);
     const cmd = cmdRaw.split("@")[0];
@@ -184,6 +195,45 @@ async function handleUpdate(update: any, env: Env) {
   const tb = splitTitleBody(text);
   if (!tb) return svc.tg.send(chatId, "投稿格式：第一行标题，后面正文。长文请用 /new … /done");
   await svc.createArticle(userId, chatId, tb.title, tb.body);
+}
+
+// ---------------- "just send it" mode ----------------
+// Telegram splits messages over 4096 chars into several updates; hold long parts briefly and join them.
+const SPLIT_AT = 3900;
+const HOLD_SECONDS = 25;
+
+async function autoPost(env: Env, svc: Service, userId: number, chatId: number, text: string, state: any) {
+  const held = state?.mode === "auto_hold" ? (state.buffer ?? "") : "";
+  const joined = held ? `${held}${text}` : text;
+  if (text.length >= SPLIT_AT && joined.length < 200_000) {
+    await setState(env, userId, "auto_hold", String(chatId), joined);
+    return;
+  }
+  if (held) await setState(env, userId, "idle");
+  await publishText(env, svc, userId, chatId, joined);
+}
+
+async function publishText(env: Env, svc: Service, userId: number, chatId: number, text: string) {
+  const own = userTitle(text);
+  const title = own?.title ?? (await generateTitle(env.AI, text));
+  const body = own?.body ?? text.trim();
+  await svc.createArticle(userId, chatId, title, body);
+}
+
+async function autoHousekeeping(env: Env) {
+  const svc = new Service(env);
+  // Flush long messages whose follow-up part never came.
+  const cutoff = new Date(Date.now() - HOLD_SECONDS * 1000).toISOString();
+  const held = await env.DB.prepare("SELECT * FROM chat_state WHERE mode='auto_hold' AND updated_at<=?").bind(cutoff).all<any>();
+  for (const st of held.results ?? []) {
+    await setState(env, st.user_id, "idle");
+    await publishText(env, svc, st.user_id, Number(st.article_id), st.buffer ?? "").catch((e) => console.error(e));
+  }
+  // Drafts that finished translating but whose auto-approval was cut off.
+  const stuck = await env.DB.prepare("SELECT a.id, a.created_by, a.current_version_id FROM articles a JOIN versions v ON v.id=a.current_version_id WHERE a.status='in_review' AND v.translation_status='done' AND a.updated_at<=?").bind(new Date(Date.now() - 120_000).toISOString()).all<any>();
+  for (const a of stuck.results ?? []) {
+    await svc.autoApprove(a.current_version_id, a.created_by).catch((e) => console.error(e));
+  }
 }
 
 async function retranslate(svc: Service, articleId: string, chatId: number) {

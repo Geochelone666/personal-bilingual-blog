@@ -17,6 +17,10 @@ export class Telegram {
     return this.call("sendMessage", { chat_id: chatId, text: text.slice(0, 4000), disable_web_page_preview: true, ...extra });
   }
 
+  sendHtml(chatId: number, html: string) {
+    return this.call("sendMessage", { chat_id: chatId, text: html.slice(0, 4000), parse_mode: "HTML", disable_web_page_preview: true });
+  }
+
   answerCallback(id: string, text: string) {
     return this.call("answerCallbackQuery", { callback_query_id: id, text: text.slice(0, 190), show_alert: text.length > 60 });
   }
@@ -28,4 +32,8 @@ export class Telegram {
 
 export function kb(rows: Array<Array<{ text: string; data: string }>>) {
   return { inline_keyboard: rows.map((r) => r.map((b) => ({ text: b.text, callback_data: b.data.slice(0, 64) }))) };
+}
+
+export function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
