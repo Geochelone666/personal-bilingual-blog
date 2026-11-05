@@ -324,6 +324,11 @@ async function admin(req: Request, url: URL, env: Env): Promise<Response> {
     const t = await req.text();
     return Response.json({ own: userTitle(t), generated: await generateTitle(env.AI, t) });
   }
+  if (url.pathname === "/admin/channel-delete" && req.method === "POST") {
+    const { message_id } = (await req.json()) as any;
+    const svc = new Service(env);
+    return Response.json(await svc.tg.call("deleteMessage", { chat_id: env.TELEGRAM_CHANNEL, message_id }));
+  }
   if (url.pathname === "/admin/jobs") {
     const r = await env.DB.prepare("SELECT id, article_id, platform, stage, status, attempts, commit_sha, deployment_url, public_urls, last_error, updated_at FROM publish_jobs ORDER BY created_at DESC LIMIT 20").all();
     const ev = await env.DB.prepare("SELECT * FROM publish_events ORDER BY id DESC LIMIT 40").all();

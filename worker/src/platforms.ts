@@ -44,19 +44,66 @@ function cut(s: string, n: number): string {
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 // ---------------- Telegram channel ----------------
-export async function postTelegram(env: Env, p: PostInput, f: F): Promise<string> {
+/** Markdown (the subset we write) -> Telegram HTML. */
+export function mdToTgHtml(md: string): string {
+  const blocks: string[] = [];
+  md = md.replace(/```[^\n]*\n([\s\S]*?)```/g, (_m, code) => `\u0000${blocks.push(`<pre>${esc(code.replace(/\n$/, ""))}</pre>`) - 1}\u0000`);
+  let out = esc(md);
+  out = out.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)[^)]*\)/g, '<a href="$2">$1</a>');
+  out = out.replace(/\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g, '<a href="$2">$1</a>');
+  out = out.replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<i>$2</i>");
+  out = out.replace(/^#{1,6}\s+(.+)$/gm, "<b>$1</b>").replace(/^&gt;\s?/gm, "▎").replace(/^\s*[-*]\s+/gm, "• ");
+  return out.replace(/\u0000(\d+)\u0000/g, (_m, i) => blocks[+i]).replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/** Split HTML text on paragraph boundaries into chunks under the Telegram limit. */
+export function splitForTelegram(html: string, limit = 3900): string[] {
+  const paras = html.split("\n\n");
+  const out: string[] = [];
+  let cur = "";
+  for (const p of paras) {
+    const pieces = p.length > limit ? p.match(new RegExp(`[\\s\\S]{1,${limit}}`, "g"))! : [p];
+    for (const piece of pieces) {
+      if (cur && cur.length + 2 + piece.length > limit) { out.push(cur); cur = piece; }
+      else cur = cur ? `${cur}\n\n${piece}` : piece;
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/** Full bilingual post: Chinese then English, each with its link; one message when it fits. */
+export function telegramMessages(p: PostInput): string[] {
+  const zh = `<b>${esc(p.titleZh)}</b>\n\n${mdToTgHtml(p.bodyZh)}\n\n<a href="${esc(p.zhUrl)}">博客原文</a>`;
+  const en = `<b>${esc(p.titleEn)}</b>\n\n${mdToTgHtml(p.bodyEn)}\n\n<a href="${esc(p.enUrl)}">Read on the blog</a>`;
+  const both = `${zh}\n\n— — —\n\n${en}`;
+  return both.length <= 3900 ? [both] : [...splitForTelegram(zh), ...splitForTelegram(en)];
+}
+
+export interface Progress { state: string | null; save(state: string): Promise<void>; }
+
+export async function postTelegram(env: Env, p: PostInput, f: F, prog?: Progress): Promise<string> {
   const tc = env.TELEGRAM_CHANNEL ?? "";
   const chan = tc.startsWith("@") || tc.startsWith("-") ? tc : `@${tc}`;
-  const text = `<b>${esc(p.titleZh)}</b>\n\n${esc(cut(plain(p.bodyZh), 600))}\n\n<a href="${esc(p.zhUrl)}">阅读全文</a> · <a href="${esc(p.enUrl)}">English</a>`;
-  const r = await f(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chan, text, parse_mode: "HTML", link_preview_options: { url: p.zhUrl } }),
-  });
-  const j: any = await r.json().catch(() => ({}));
-  if (!j.ok) throw new Error(`Telegram 频道发送失败：${j.description ?? r.status}`);
-  const user = j.result?.chat?.username;
-  return user ? `https://t.me/${user}/${j.result.message_id}` : `https://t.me/c/${String(j.result.chat.id).replace(/^-100/, "")}/${j.result.message_id}`;
+  const msgs = telegramMessages(p);
+  // Resume after a partial failure: state = JSON {sent:n, first:url}
+  const st: { sent: number; first?: string } = prog?.state ? JSON.parse(prog.state) : { sent: 0 };
+  for (let i = st.sent; i < msgs.length; i++) {
+    const r = await f(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chan, text: msgs[i], parse_mode: "HTML", link_preview_options: { is_disabled: true } }),
+    });
+    const j: any = await r.json().catch(() => ({}));
+    if (!j.ok) throw new Error(`Telegram 频道发送失败：${j.description ?? r.status}`);
+    const user = j.result?.chat?.username;
+    const url = user ? `https://t.me/${user}/${j.result.message_id}` : `https://t.me/c/${String(j.result.chat.id).replace(/^-100/, "")}/${j.result.message_id}`;
+    st.sent = i + 1;
+    st.first ??= url;
+    await prog?.save(JSON.stringify(st));
+  }
+  return st.first!;
 }
 
 // ---------------- dev.to ----------------
@@ -121,8 +168,8 @@ export async function postBluesky(env: Env, p: PostInput, f: F): Promise<string>
   return link(j.uri.split("/").pop());
 }
 
-export async function postTo(platform: string, env: Env, p: PostInput, f: F): Promise<string> {
-  if (platform === "telegram") return postTelegram(env, p, f);
+export async function postTo(platform: string, env: Env, p: PostInput, f: F, prog?: Progress): Promise<string> {
+  if (platform === "telegram") return postTelegram(env, p, f, prog);
   if (platform === "devto") return postDevto(env, p, f);
   if (platform === "bluesky") return postBluesky(env, p, f);
   throw new Error(`未知平台 ${platform}`);

@@ -100,7 +100,10 @@ export class Service {
     const v = (await this.version(ap.version_id))!;
     if (v.zh_hash !== ap.zh_hash || v.en_hash !== ap.en_hash) throw new Error("版本内容与审批不一致，拒绝发布");
     const [zhUrl, enUrl] = JSON.parse(blog.public_urls);
-    const url = await postTo(job.platform, this.env, { articleId: job.article_id, titleZh: v.title_zh, bodyZh: v.body_zh, titleEn: v.title_en!, bodyEn: v.body_en!, zhUrl, enUrl }, this.fetcher);
+    const url = await postTo(job.platform, this.env, { articleId: job.article_id, titleZh: v.title_zh, bodyZh: v.body_zh, titleEn: v.title_en!, bodyEn: v.body_en!, zhUrl, enUrl }, this.fetcher, {
+      state: job.deployment_id ?? null,
+      save: async (st) => { await this.db().prepare("UPDATE publish_jobs SET deployment_id=?, updated_at=? WHERE id=?").bind(st, nowIso(), job.id).run(); },
+    });
     await this.event(job.id, `${job.platform}_post`, true, { url });
     await this.db().prepare("UPDATE publish_jobs SET stage='verified', status='done', public_urls=?, last_error=NULL, updated_at=? WHERE id=?").bind(JSON.stringify([url]), nowIso(), job.id).run();
     await this.maybeReceipt(job.approval_id);
