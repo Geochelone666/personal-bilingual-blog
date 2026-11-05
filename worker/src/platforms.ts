@@ -116,7 +116,15 @@ export async function postDevto(env: Env, p: PostInput, f: F): Promise<string> {
   if (mine.ok) {
     const list: any[] = await mine.json();
     const hit = list.find((a) => a.canonical_url === p.enUrl);
-    if (hit?.url) return hit.url;
+    if (hit?.url) {
+      // Re-run of a job (e.g. after proofreading): bring the existing article up to date.
+      const body = `${p.bodyEn}\n\n---\n*Originally published at [${new URL(p.enUrl).host}](${p.enUrl}). Written in Chinese, translated to English.*`;
+      if (hit.body_markdown !== undefined && hit.body_markdown !== body) {
+        const u = await f(`https://dev.to/api/articles/${hit.id}`, { method: "PUT", headers: h, body: JSON.stringify({ article: { title: p.titleEn, body_markdown: body } }) });
+        if (!u.ok) throw new Error(`dev.to 更新失败：HTTP ${u.status}`);
+      }
+      return hit.url;
+    }
   } else if (mine.status === 401) throw new Error("dev.to API 密钥无效");
   const body = `${p.bodyEn}\n\n---\n*Originally published at [${new URL(p.enUrl).host}](${p.enUrl}). Written in Chinese, translated to English.*`;
   const r = await f("https://dev.to/api/articles", {
