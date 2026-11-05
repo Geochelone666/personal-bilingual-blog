@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cleanPath, cleanReferrer, weekKey, torontoParts, isBot } from "../src/p3";
+import { cleanPath, cleanReferrer, weekKey, torontoParts, isBot, buildBackup } from "../src/p3";
 import { fixSentenceSpacing } from "../src/util";
 
 describe("p3", () => {
@@ -33,5 +33,37 @@ describe("p3", () => {
     expect(isBot("Mozilla/5.0 HeadlessChrome/120")).toBe(true);
     expect(isBot(null)).toBe(true);
     expect(isBot("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36")).toBe(false);
+  });
+});
+
+describe("public content backup", () => {
+  it("queries only published versions and excludes drafts, private metadata and pending jobs", async () => {
+    const queries: string[] = [];
+    const fakeDb = {
+      prepare(sql: string) {
+        queries.push(sql);
+        return { all: async () => ({ results: [] }) };
+      },
+    };
+    const output = JSON.parse(await buildBackup({ DB: fakeDb } as any));
+    expect(output).toEqual({ articles: [], versions: [], publish_jobs: [] });
+    expect(queries).toHaveLength(3);
+    expect(queries[0]).toContain("published_version_id IS NOT NULL");
+    expect(queries[1]).toContain("a.published_version_id = v.id");
+    expect(queries[2]).toContain("j.status='done'");
+    expect(queries.join(" ")).not.toMatch(/SELECT \* FROM glossary|created_by|current_version_id|last_error|review_sent_for/i);
+  });
+
+  it("backs up exactly the public published version, not a later review draft", async () => {
+    const calls = [
+      [{ id: "published", published_version_id: "version1" }],
+      [{ id: "version1", body_zh: "public" }],
+      [{ article_id: "published", platform: "blog", public_urls: '["https://example.com"]' }],
+    ];
+    let index = 0;
+    const fakeDb = { prepare: () => ({ all: async () => ({ results: calls[index++] }) }) };
+    const output = JSON.parse(await buildBackup({ DB: fakeDb } as any));
+    expect(output.versions).toEqual([{ id: "version1", body_zh: "public" }]);
+    expect(output).not.toHaveProperty("glossary");
   });
 });
