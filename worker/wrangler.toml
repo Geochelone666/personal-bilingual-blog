@@ -24,8 +24,9 @@ SITE_URL = "https://personal-bilingual-blog.pages.dev"
 WORKER_URL = "https://pbb-writer.geochelone666.workers.dev"
 DEEPL_MIN_REMAINING = "2000"
 AUTO_PUBLISH = "true"              # user: "我发了你就给我搞就行" (2026-11-04)
-ENABLED_PLATFORMS = "blog,telegram,devto,bluesky"  # each also needs its credentials
-TELEGRAM_CHANNEL = "@inkward_blog"
+ENABLED_PLATFORMS = "blog,telegram,telegram_en,devto,bluesky"  # each also needs its credentials
+TELEGRAM_CHANNEL = "@inkward_zh"   # Chinese channel
+TELEGRAM_CHANNEL_EN = "@inkward_en"
 BLUESKY_HANDLE = "yanzhou05.bsky.social"
 
 # Secrets (never committed):

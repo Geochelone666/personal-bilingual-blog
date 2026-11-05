@@ -76,7 +76,7 @@ describe("P1 cross-posting", () => {
     const rec = w.texts().filter((t) => t.includes("《标题》"));
     expect(rec.length).toBe(1);
     expect(rec[0]).toContain("⚠️ 《标题》部分发布");
-    expect(rec[0]).toContain('Telegram 频道：<a href="https://t.me/chan/7">');
+    expect(rec[0]).toContain('Telegram 中文频道：<a href="https://t.me/chan/7">');
     expect(rec[0]).toContain("dev.to：未成功");
     (globalThis as any).fetch = base;
   });

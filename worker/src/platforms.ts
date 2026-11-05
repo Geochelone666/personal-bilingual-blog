@@ -12,8 +12,8 @@ export interface PostInput {
 }
 type F = typeof fetch;
 
-export const PLATFORM_LABEL: Record<string, string> = { blog: "博客", telegram: "Telegram 频道", devto: "dev.to", bluesky: "Bluesky" };
-export const PLATFORM_ORDER = ["blog", "telegram", "devto", "bluesky"];
+export const PLATFORM_LABEL: Record<string, string> = { blog: "博客", telegram: "Telegram 中文频道", telegram_en: "Telegram 英文频道", devto: "dev.to", bluesky: "Bluesky" };
+export const PLATFORM_ORDER = ["blog", "telegram", "telegram_en", "devto", "bluesky"];
 
 /** A platform is enabled when it is listed in ENABLED_PLATFORMS and its credentials exist. */
 export function enabledPlatforms(env: Env): string[] {
@@ -21,6 +21,7 @@ export function enabledPlatforms(env: Env): string[] {
   const ready: Record<string, boolean> = {
     blog: true,
     telegram: !!env.TELEGRAM_CHANNEL,
+    telegram_en: !!env.TELEGRAM_CHANNEL_EN,
     devto: !!env.DEVTO_API_KEY,
     bluesky: !!env.BLUESKY_HANDLE && !!env.BLUESKY_APP_PASSWORD,
   };
@@ -73,20 +74,21 @@ export function splitForTelegram(html: string, limit = 3900): string[] {
   return out;
 }
 
-/** Full bilingual post: Chinese then English, each with its link; one message when it fits. */
-export function telegramMessages(p: PostInput): string[] {
-  const zh = `<b>${esc(p.titleZh)}</b>\n\n${mdToTgHtml(p.bodyZh)}\n\n<a href="${esc(p.zhUrl)}">博客原文</a>`;
-  const en = `<b>${esc(p.titleEn)}</b>\n\n${mdToTgHtml(p.bodyEn)}\n\n<a href="${esc(p.enUrl)}">Read on the blog</a>`;
-  const both = `${zh}\n\n— — —\n\n${en}`;
-  return both.length <= 3900 ? [both] : [...splitForTelegram(zh), ...splitForTelegram(en)];
+/** One language per channel: full text + link to that language's blog page. */
+export function telegramMessages(p: PostInput, lang: "zh" | "en"): string[] {
+  const html =
+    lang === "zh"
+      ? `<b>${esc(p.titleZh)}</b>\n\n${mdToTgHtml(p.bodyZh)}\n\n<a href="${esc(p.zhUrl)}">博客原文</a>`
+      : `<b>${esc(p.titleEn)}</b>\n\n${mdToTgHtml(p.bodyEn)}\n\n<a href="${esc(p.enUrl)}">Read on the blog</a>`;
+  return splitForTelegram(html);
 }
 
 export interface Progress { state: string | null; save(state: string): Promise<void>; }
 
-export async function postTelegram(env: Env, p: PostInput, f: F, prog?: Progress): Promise<string> {
-  const tc = env.TELEGRAM_CHANNEL ?? "";
+export async function postTelegram(env: Env, p: PostInput, f: F, prog?: Progress, lang: "zh" | "en" = "zh"): Promise<string> {
+  const tc = (lang === "zh" ? env.TELEGRAM_CHANNEL : env.TELEGRAM_CHANNEL_EN) ?? "";
   const chan = tc.startsWith("@") || tc.startsWith("-") ? tc : `@${tc}`;
-  const msgs = telegramMessages(p);
+  const msgs = telegramMessages(p, lang);
   // Resume after a partial failure: state = JSON {sent:n, first:url}
   const st: { sent: number; first?: string } = prog?.state ? JSON.parse(prog.state) : { sent: 0 };
   for (let i = st.sent; i < msgs.length; i++) {
@@ -169,7 +171,8 @@ export async function postBluesky(env: Env, p: PostInput, f: F): Promise<string>
 }
 
 export async function postTo(platform: string, env: Env, p: PostInput, f: F, prog?: Progress): Promise<string> {
-  if (platform === "telegram") return postTelegram(env, p, f, prog);
+  if (platform === "telegram") return postTelegram(env, p, f, prog, "zh");
+  if (platform === "telegram_en") return postTelegram(env, p, f, prog, "en");
   if (platform === "devto") return postDevto(env, p, f);
   if (platform === "bluesky") return postBluesky(env, p, f);
   throw new Error(`未知平台 ${platform}`);

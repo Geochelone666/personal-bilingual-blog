@@ -23,7 +23,8 @@ export interface Env {
   WORKER_URL: string; // public base URL of this worker (for preview links)
   PUBLISH_MODE: string; // "preview" (test branch, not production) | "production"
   ENABLED_PLATFORMS?: string; // e.g. "blog,telegram,devto,bluesky"
-  TELEGRAM_CHANNEL?: string; // @username of the channel
+  TELEGRAM_CHANNEL?: string; // @username of the Chinese channel
+  TELEGRAM_CHANNEL_EN?: string; // @username of the English channel
   BLUESKY_HANDLE?: string;
   AUTO_PUBLISH?: string; // "true": every message from an allowed user is published without an approval step (user asked 2026-11-04)
   DEEPL_MIN_REMAINING: string; // safety margin in chars, e.g. "2000"
