@@ -309,6 +309,16 @@ async function admin(req: Request, url: URL, env: Env): Promise<Response> {
     return json(out);
   }
 
+  if (url.pathname === "/admin/clear-commands" && req.method === "POST") {
+    const tg = new Service(env).tg;
+    await tg.call("deleteMyCommands", {});
+    await tg.call("setChatMenuButton", { menu_button: { type: "default" } });
+    return Response.json({ ok: true, commands: await tg.call("getMyCommands", {}) });
+  }
+  if (url.pathname === "/admin/title-test" && req.method === "POST") {
+    const t = await req.text();
+    return Response.json({ own: userTitle(t), generated: await generateTitle(env.AI, t) });
+  }
   if (url.pathname === "/admin/jobs") {
     const r = await env.DB.prepare("SELECT id, article_id, platform, stage, status, attempts, commit_sha, deployment_url, public_urls, last_error, updated_at FROM publish_jobs ORDER BY created_at DESC LIMIT 20").all();
     const ev = await env.DB.prepare("SELECT * FROM publish_events ORDER BY id DESC LIMIT 40").all();
