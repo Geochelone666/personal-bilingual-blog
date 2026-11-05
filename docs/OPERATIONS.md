@@ -40,3 +40,16 @@ cd blog && npm ci && npx -y node@24 node_modules/.bin/astro build
 - Backup: Worker commits backup/content.json (articles, versions, jobs, glossary; no Telegram ids) every Monday; Git history = versioned backup. D1 Time Travel covers recent point-in-time restore. Workflow ignores backup/**, worker/**, docs/**.
 - Proofreading: PROOFREAD=true → awaiting_proofread; Hark task a538a4ef every 30 min proofreads EN and sets in_review.
 - Medium importer caches URLs; when re-importing use ?v=N and reset canonical. Medium limits stories published per 24h (deletes seem to count).
+
+## P4 (2026-11-05)
+- AUTO_PUBLISH=false: every post gets a Telegram review card; nothing publishes without the approve button.
+- Kinds (deterministic, src/p4.ts detectKind): quick thought (≤280 chars, ≤3 paragraphs, no structure, or `#想法`) → TG zh + TG en + Bluesky (thread if long), no blog. Article (else, or `#文章`) → blog + recommendations.
+- Category (keyword rules, classify): dev / ai / finance / politics / essay. DEV only for dev with code or many dev terms. Medium for all article categories. Bluesky: lead sentences + optional 2nd post + link post; never cut mid-sentence. TG: full text if ≤3800 chars else summary + link.
+- Review card: platform toggles (tp:), approve (ap: binds version, zh/en hash, targets, drafts hash incl. cover), edit zh/en, retranslate, status, cancel. Preview page shows full zh/en, every platform draft, cover.
+- Approval stores drafts_json; publishers post exactly that. Blog first; others wait for verified blog.
+- Idempotency: TG pending marker + non-destructive probe (editMessageReplyMarkup) of ids after channel_cursor; Bluesky client-chosen TID rkeys + getRecord before create; dev.to canonical lookup. Timeouts are retried only after the remote check.
+- Edits: TG edited in place; dev.to PUT; Bluesky never reposted (no edit API); Medium not auto-synced. Card shows 需同步/无变化.
+- Credential errors (dev.to 401, Bluesky auth, Telegram 401/403) fail the job at once (no retries); receipt lists 未成功 + /retry.
+- Covers: blog/scripts/og.mjs generates /og/<lang>/<slug>.png at build (satori + resvg + Google Fonts subset, never fails the build). Custom: photo captioned `/cover <id>`; `/cover <id> 默认` resets. Cover is part of the drafts hash.
+- Medium: job stage 'external'; Hark hourly task 8b12b5ba imports and marks done in D1.
+- Proofreading: translate → awaiting_proofread → Hark task a538a4ef → in_review → cron sends review card.
