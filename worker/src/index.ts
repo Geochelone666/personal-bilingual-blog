@@ -300,6 +300,7 @@ async function admin(req: Request, url: URL, env: Env): Promise<Response> {
     await step("deepl", async () => { const u = await deeplUsage(env.DEEPL_API_KEY); return { used: u.character_count, limit: u.character_limit, keyType: "free(:fx)" }; });
     if (env.DEVTO_API_KEY) await step("devto", async () => { const r = await fetch("https://dev.to/api/users/me", { headers: { "api-key": env.DEVTO_API_KEY!, "User-Agent": "pbb-writer" } }); if (!r.ok) throw new Error(`HTTP ${r.status}`); const j: any = await r.json(); return { user: j.username }; });
     if (env.TELEGRAM_CHANNEL) await step("telegram_channel", async () => { const c = await svc.tg.call("getChat", { chat_id: env.TELEGRAM_CHANNEL }); return { title: c.title, username: c.username }; });
+    if (env.BLUESKY_APP_PASSWORD) await step("bluesky", async () => { const r = await fetch("https://bsky.social/xrpc/com.atproto.server.createSession", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ identifier: env.BLUESKY_HANDLE, password: env.BLUESKY_APP_PASSWORD }) }); if (!r.ok) throw new Error(`HTTP ${r.status}`); const j: any = await r.json(); return { handle: j.handle }; });
     out.platforms = enabledPlatforms(env);
     await step("github", async () => {
       const r = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}`, { headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, "User-Agent": "pbb", Accept: "application/vnd.github+json" } });
