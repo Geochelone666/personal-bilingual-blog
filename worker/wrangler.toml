@@ -14,7 +14,6 @@ database_id = "12f69985-d737-4f23-b17c-401ef58665d6"
 migrations_dir = "migrations"
 
 [vars]
-ALLOWED_TELEGRAM_USER_IDS = "7704621098"
 GITHUB_REPO = "Geochelone666/personal-bilingual-blog"
 GITHUB_BRANCH = "main"            # production (approved by user 2026-11-04)
 PUBLISH_MODE = "production"        # "preview" | "production"
