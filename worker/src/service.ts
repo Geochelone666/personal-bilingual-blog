@@ -615,13 +615,16 @@ export class Service {
 
     if (job.stage === "queued") {
       const date = a.first_published_at ?? nowIso();
+      // "updated" only when the blog already had this post (a quick thought may be published elsewhere first).
+      const blogBefore = !!(await this.db().prepare("SELECT 1 FROM publish_jobs WHERE article_id=? AND platform='blog' AND status='done' LIMIT 1").bind(a.id).first());
+      const updated = blogBefore ? nowIso() : undefined;
       const drafts = ap.drafts_json ? JSON.parse(ap.drafts_json) : null;
       const cover = drafts?.blog?.cover?.type === "custom" ? drafts.blog.cover.sha as string : null;
       const coverPath = cover ? `/covers/${a.slug}-${cover.slice(0, 8)}.jpg` : undefined;
       const extra = { category: a.category ?? undefined, cover: coverPath };
       const files: Array<{ path: string; content?: string; base64?: string }> = [
-        { path: postPath("zh", a.slug), content: renderPostFile({ slug: a.slug, lang: "zh", title: v.title_zh, body: v.body_zh, date, updated: a.first_published_at ? nowIso() : undefined, articleId: a.id, versionId: v.id, versionHash: v.zh_hash, approvalHash: ap.approval_hash, kind: a.kind ?? undefined, ...extra }) },
-        { path: postPath("en", a.slug), content: renderPostFile({ slug: a.slug, lang: "en", title: v.title_en!, body: v.body_en!, date, updated: a.first_published_at ? nowIso() : undefined, articleId: a.id, versionId: v.id, versionHash: v.en_hash!, approvalHash: ap.approval_hash, translationOf: v.zh_hash, kind: a.kind ?? undefined, ...extra }) },
+        { path: postPath("zh", a.slug), content: renderPostFile({ slug: a.slug, lang: "zh", title: v.title_zh, body: v.body_zh, date, updated, articleId: a.id, versionId: v.id, versionHash: v.zh_hash, approvalHash: ap.approval_hash, kind: a.kind ?? undefined, ...extra }) },
+        { path: postPath("en", a.slug), content: renderPostFile({ slug: a.slug, lang: "en", title: v.title_en!, body: v.body_en!, date, updated, articleId: a.id, versionId: v.id, versionHash: v.en_hash!, approvalHash: ap.approval_hash, translationOf: v.zh_hash, kind: a.kind ?? undefined, ...extra }) },
       ];
       if (cover) {
         if (!a.cover_file_id || a.cover_sha !== cover) throw new Error("封面已在审批后更换，拒绝发布");
