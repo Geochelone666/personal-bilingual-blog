@@ -147,7 +147,7 @@ export class Service {
     await this.maybeReceipt(job.approval_id);
   }
 
-  /** Quick thoughts have no blog job: mark the article published once its jobs finish. */
+  /** Approvals without a blog job (quick thoughts approved before the blog took them): mark published once their jobs finish. */
   private async maybeQuickDone(approvalId: string) {
     const jobs = (await this.db().prepare("SELECT platform, status FROM publish_jobs WHERE approval_id=?").bind(approvalId).all<any>()).results ?? [];
     if (jobs.some((j) => j.platform === "blog") || jobs.some((j) => j.status === "active")) return;
@@ -360,7 +360,8 @@ export class Service {
     const avail = recs.filter((r) => r.available).map((r) => r.platform);
     const chosen: string[] = a.targets ? JSON.parse(a.targets) : defaultTargets(recs);
     const t = chosen.filter((p) => avail.includes(p));
-    if ((a.kind ?? "article") === "article" && !t.includes("blog")) t.unshift("blog");
+    // The blog keeps everything the author sends: mandatory for every kind.
+    if (avail.includes("blog") && !t.includes("blog")) t.unshift("blog");
     return canonicalPlatforms(t);
   }
   draftsFor(a: Article, v: Version, targets: string[]): Drafts {
@@ -433,7 +434,7 @@ export class Service {
       (a.kind === "quick" ? "" : `封面：${a.cover_sha ? "自定义图片" : "自动生成"}（替换：发图片并配文 /cover ${a.id}）\n`) +
       `中文 ${v.zh_hash.slice(0, 8)} · 英文 ${v.en_hash!.slice(0, 8)} · 平台内容 ${st.draftsHash.slice(0, 8)}\n\n` +
       `完整预览（中英全文、各平台内容${a.kind === "quick" ? "" : "、封面"}，7 天有效）：\n${await this.previewUrl(v.id)}`;
-    const toggles = recs.filter((r) => r.available && !(r.platform === "blog" && a.kind !== "quick")).map((r) => ({ text: `${targets.includes(r.platform) ? "✅" : "⬜"} ${LABEL[r.platform]}`, data: `tp:${a.id}:${r.platform}` }));
+    const toggles = recs.filter((r) => r.available && r.platform !== "blog").map((r) => ({ text: `${targets.includes(r.platform) ? "✅" : "⬜"} ${LABEL[r.platform]}`, data: `tp:${a.id}:${r.platform}` }));
     const rows: Array<Array<{ text: string; data: string }>> = [];
     for (let i = 0; i < toggles.length; i += 3) rows.push(toggles.slice(i, i + 3));
     rows.push([{ text: `✅ 批准发布（${targets.length} 个平台）`, data: `ap:${v.id}:${st.hash.slice(0, 16)}` }]);
@@ -449,7 +450,7 @@ export class Service {
     if (!a || !v || a.status !== "in_review") return "当前不在审核中";
     const recs = this.recs(a, v);
     if (!recs.find((r) => r.platform === platform)?.available) return "该平台不可用";
-    if (platform === "blog" && a.kind !== "quick") return "正式文章必须发布博客";
+    if (platform === "blog") return "博客收录全部内容，不能取消";
     const cur = this.targetsOf(a, v);
     const next = cur.includes(platform) ? cur.filter((p) => p !== platform) : [...cur, platform];
     if (!next.length) return "至少保留一个平台";
@@ -619,8 +620,8 @@ export class Service {
       const coverPath = cover ? `/covers/${a.slug}-${cover.slice(0, 8)}.jpg` : undefined;
       const extra = { category: a.category ?? undefined, cover: coverPath };
       const files: Array<{ path: string; content?: string; base64?: string }> = [
-        { path: postPath("zh", a.slug), content: renderPostFile({ slug: a.slug, lang: "zh", title: v.title_zh, body: v.body_zh, date, updated: a.first_published_at ? nowIso() : undefined, articleId: a.id, versionId: v.id, versionHash: v.zh_hash, approvalHash: ap.approval_hash, ...extra }) },
-        { path: postPath("en", a.slug), content: renderPostFile({ slug: a.slug, lang: "en", title: v.title_en!, body: v.body_en!, date, updated: a.first_published_at ? nowIso() : undefined, articleId: a.id, versionId: v.id, versionHash: v.en_hash!, approvalHash: ap.approval_hash, translationOf: v.zh_hash, ...extra }) },
+        { path: postPath("zh", a.slug), content: renderPostFile({ slug: a.slug, lang: "zh", title: v.title_zh, body: v.body_zh, date, updated: a.first_published_at ? nowIso() : undefined, articleId: a.id, versionId: v.id, versionHash: v.zh_hash, approvalHash: ap.approval_hash, kind: a.kind ?? undefined, ...extra }) },
+        { path: postPath("en", a.slug), content: renderPostFile({ slug: a.slug, lang: "en", title: v.title_en!, body: v.body_en!, date, updated: a.first_published_at ? nowIso() : undefined, articleId: a.id, versionId: v.id, versionHash: v.en_hash!, approvalHash: ap.approval_hash, translationOf: v.zh_hash, kind: a.kind ?? undefined, ...extra }) },
       ];
       if (cover) {
         if (!a.cover_file_id || a.cover_sha !== cover) throw new Error("封面已在审批后更换，拒绝发布");

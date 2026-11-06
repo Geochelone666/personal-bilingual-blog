@@ -16,6 +16,7 @@ const posts = defineCollection({
     translationOf: z.string().optional(),
     category: z.string().optional(),
     cover: z.string().optional(),
+    kind: z.enum(["article", "quick"]).optional(),
   }),
 });
 
