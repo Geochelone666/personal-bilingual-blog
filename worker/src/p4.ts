@@ -65,7 +65,7 @@ export function recommend(kind: Kind, category: Category, enabled: readonly stri
     add("telegram", true, "短想法，中文全文");
     add("telegram_en", true, "短想法，英文全文");
     add("bluesky", true, "短帖可独立阅读，超长自动拆成 Thread");
-    add("blog", false, "短想法不强制扩写成博客", false);
+    add("blog", true, "博客收录全部内容（必选）");
     add("medium", false, "Medium 只发正式文章", false);
     add("devto", false, "DEV 只发技术文章", false);
     return out;

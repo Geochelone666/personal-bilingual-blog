@@ -8,7 +8,7 @@ const posts = (await getCollection("posts", (p) => p.data.lang === lang)).sort((
   {posts.length === 0 && <p>{lang === "zh" ? "还没有文章。" : "No posts yet."}</p>}
   <ul class="posts">
     {posts.map((p) => (
-      <li><a href={`/${lang}/posts/${p.data.postSlug}/`}>{p.data.title}</a> <span class="meta">{p.data.date.toISOString().slice(0, 10)}</span></li>
+      <li><a href={`/${lang}/posts/${p.data.postSlug}/`}>{p.data.title}</a> <span class="meta">{p.data.kind === "quick" && (lang === "zh" ? "短想法 · " : "Note · ")}{p.data.date.toISOString().slice(0, 10)}</span></li>
     ))}
   </ul>
 </Base>

@@ -14,6 +14,7 @@ export interface PostFileInput {
   translationOf?: string; // for en: zh hash it was approved against
   category?: string;
   cover?: string; // site path of a custom cover image
+  kind?: string; // "quick" marks a short thought
 }
 
 function yamlStr(s: string): string {
@@ -41,6 +42,7 @@ export function renderPostFile(p: PostFileInput): string {
     `versionHash: ${yamlStr(p.versionHash)}`,
     `approvalHash: ${yamlStr(p.approvalHash)}`,
     p.translationOf ? `translationOf: ${yamlStr(p.translationOf)}` : null,
+    p.kind === "quick" ? `kind: quick` : null,
     p.category ? `category: ${yamlStr(p.category)}` : null,
     p.cover ? `cover: ${yamlStr(p.cover)}` : null,
     "---",

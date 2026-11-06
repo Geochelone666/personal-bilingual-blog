@@ -161,7 +161,7 @@ describe("P4 rules", () => {
 });
 
 describe("P4 end-to-end (fake platforms)", () => {
-  it("1+4 quick thought: bilingual draft, full Bluesky/TG drafts in review, no blog; single-platform publish", async () => {
+  it("1+4 quick thought: bilingual draft, full Bluesky/TG drafts in review, blog mandatory; blog + chosen platforms", async () => {
     const t = platformWorld();
     await t.w.text(QUICK);
     const a = await t.art();
@@ -169,20 +169,64 @@ describe("P4 end-to-end (fake platforms)", () => {
     const msgs = t.w.texts();
     expect(msgs.some((m) => m.includes("【中文原稿】") && m.includes("【英文译稿】") && m.includes("【Bluesky"))).toBe(true);
     const buttons = t.w.lastButtons();
-    expect(buttons.some((b) => b === `tp:${a.id}:blog`)).toBe(false);
-    // keep only Bluesky
+    expect(buttons.some((b) => b === `tp:${a.id}:blog`)).toBe(false); // blog cannot be toggled off
+    expect(msgs.some((m) => m.includes("✅ 博客"))).toBe(true);
+    // keep only Bluesky besides the blog
     await t.w.click(`tp:${a.id}:telegram`);
     await t.w.click(`tp:${a.id}:telegram_en`);
     const card = [...t.w.sent].reverse().find((s) => s.method === "editMessageText")!;
     const ap = card.payload.reply_markup.inline_keyboard.flat().map((b: any) => b.callback_data).find((d: string) => d.startsWith("ap:"));
     await t.w.click(ap);
-    await t.run(3);
+    await t.run(8);
     const jobs = await t.jobs();
-    expect(jobs.map((j) => j.platform)).toEqual(["bluesky"]);
-    expect(jobs[0].status).toBe("done");
+    expect(jobs.map((j) => j.platform).sort()).toEqual(["blog", "bluesky"]);
+    expect(jobs.every((j) => j.status === "done")).toBe(true);
     expect((await t.art()).status).toBe("published");
     expect(t.state.chanSends).toBe(0);
-    expect(t.w.texts().some((m) => m.includes("已发布") && m.includes("bsky.app"))).toBe(true);
+    t.restore();
+  });
+
+  it("quick thought published before the blog took them: re-review adds only the blog, channels and Bluesky are not re-posted", async () => {
+    const t = platformWorld();
+    await t.w.text(QUICK);
+    const a = await t.art();
+    // Simulate the old rule: approved for the channels and Bluesky only, no blog job.
+    await t.w.DB.prepare("UPDATE articles SET targets=? WHERE id=?").bind(JSON.stringify(["telegram", "telegram_en", "bluesky"]), a.id).run();
+    const { Service } = await import("../src/service");
+    const svc = new Service(t.w.env as any);
+    const st = (await svc.reviewState(a.id))!;
+    expect(st.targets).toContain("blog"); // new rule forces it
+    // Legacy approval row + jobs without the blog, as production has them
+    const { buildDrafts, draftHash } = await import("../src/p4");
+    const legacy = buildDrafts({ kind: "quick", category: "essay", titleZh: st.v.title_zh, bodyZh: st.v.body_zh, titleEn: st.v.title_en!, bodyEn: st.v.body_en! }, ["bluesky", "telegram", "telegram_en"]);
+    await t.w.DB.prepare("INSERT INTO approvals (id, article_id, version_id, zh_hash, en_hash, platforms, approval_hash, approved_by, approved_at, drafts_json, drafts_hash) VALUES ('ap_old',?,?,?,?,?,'h_old',1,'2026-11-06T00:00:00Z',?,?)")
+      .bind(a.id, st.v.id, st.v.zh_hash, st.v.en_hash, JSON.stringify(["bluesky", "telegram", "telegram_en"]), JSON.stringify(legacy), await draftHash(legacy)).run();
+    for (const p of ["bluesky", "telegram", "telegram_en"])
+      await t.w.DB.prepare("INSERT INTO publish_jobs (id, idempotency_key, article_id, approval_id, platform, stage, status, attempts, next_attempt_at, created_at, updated_at) VALUES (?,?,?,'ap_old',?,'queued','active',0,'2026-11-06T00:00:00Z','2026-11-06T00:00:00Z','2026-11-06T00:00:00Z')")
+        .bind(`job_old_${p}`, `k_old_${p}`, a.id, p).run();
+    await t.w.DB.prepare("UPDATE articles SET status='publishing' WHERE id=?").bind(a.id).run();
+    await t.run(6);
+    expect((await t.art()).status).toBe("published");
+    const sendsBefore = t.state.chanSends, bskyBefore = t.state.bskyCreates;
+    expect(sendsBefore).toBe(2);
+    // Re-open review with the new rule (what the ops step does), approve, publish.
+    await t.w.DB.prepare("UPDATE articles SET targets=NULL, status='in_review', review_sent_for=NULL, updated_at='2026-01-01T00:00:00Z' WHERE id=?").bind(a.id).run();
+    await t.run(1);
+    const card = t.w.texts().reverse().find((m) => m.includes("推荐平台"))!;
+    expect(card).toContain("✅ 博客");
+    expect(card).toContain("（无变化）");
+    await t.w.click(t.ap());
+    await t.run(10);
+    const fresh = (await t.jobs()).filter((j) => j.approval_id !== "ap_old");
+    expect(fresh.map((j) => j.platform).sort()).toEqual(["blog", "bluesky", "telegram", "telegram_en"]);
+    expect(fresh.every((j) => j.status === "done")).toBe(true);
+    expect(t.state.chanSends).toBe(sendsBefore); // channels untouched
+    expect(t.state.chanEdits).toBe(0);
+    expect(t.state.bskyCreates).toBe(bskyBefore); // no duplicate Bluesky post
+    const head = t.w.commits.get((t.w.heads as any)[t.w.env.GITHUB_BRANCH])!;
+    const zh = Object.entries(head.files).find(([k]) => k.includes("/zh/") && k.endsWith(".md"))![1];
+    expect(zh).toContain("kind: quick");
+    expect((await t.art()).status).toBe("published");
     t.restore();
   });
 
