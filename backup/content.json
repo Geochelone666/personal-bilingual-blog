@@ -1,32 +1,44 @@
 {
- "exported_at": "2026-11-05T19:30:37.763099Z",
  "articles": [
   {
    "id": "a_20261104_04e296cb1c3b",
    "slug": "2026-11-04-test-draft-first-end-to-end-test",
-   "status": "published",
-   "current_version_id": "v_20261104_c23fd8ae8ccd",
+   "kind": "article",
+   "category": null,
    "first_published_at": "2026-11-04T23:15:18.298Z",
-   "created_at": "2026-11-04T18:42:59.298Z",
-   "updated_at": "2026-11-04T23:17:19.375Z"
+   "published_version_id": "v_20261104_c23fd8ae8ccd"
   },
   {
    "id": "a_20261105_9487951b59db",
    "slug": "2026-11-05-cutting-edge-retro-programmers",
-   "status": "published",
-   "current_version_id": "v_20261105_8b85fc494aaa",
+   "kind": "article",
+   "category": "dev",
    "first_published_at": "2026-11-05T05:18:38.909Z",
-   "created_at": "2026-11-05T05:18:36.119Z",
-   "updated_at": "2026-11-05T05:21:20.175Z"
+   "published_version_id": "v_20261105_8b85fc494aaa"
   },
   {
    "id": "a_20261105_97e40a9e8b65",
    "slug": "2026-11-05-the-ai-revolution-may-survive-will-tech-stocks",
-   "status": "published",
-   "current_version_id": "v_20261105_20378d5b11b2",
+   "kind": "article",
+   "category": "finance",
    "first_published_at": "2026-11-05T17:35:55.209Z",
-   "created_at": "2026-11-05T17:35:49.873Z",
-   "updated_at": "2026-11-05T18:22:20.272Z"
+   "published_version_id": "v_20261105_20378d5b11b2"
+  },
+  {
+   "id": "a_20261106_11d6d7946bfb",
+   "slug": "2026-11-06-moving-is-so-tiring",
+   "kind": "quick",
+   "category": "essay",
+   "first_published_at": "2026-11-06T20:30:28.582Z",
+   "published_version_id": "v_20261106_df022f1504fc"
+  },
+  {
+   "id": "a_20261108_99c7ab9d22cf",
+   "slug": "2026-11-08-thoughts-and-reflections-on-java",
+   "kind": "article",
+   "category": "dev",
+   "first_published_at": "2026-11-08T20:39:19.567Z",
+   "published_version_id": "v_20261108_0e5fc8cd2acc"
   }
  ],
  "versions": [
@@ -40,7 +52,6 @@
    "title_en": "[Test Draft] First End-to-End Test",
    "body_en": "This is a test post intended solely to verify the publishing process. It will be translated by DeepL, manually reviewed, and then published only to the staging preview site; it will not appear on the live blog.\n\nIf you can see both the Chinese and English versions on the preview site, it means the entire process has been successfully completed.",
    "en_hash": "95b16f42d49de87e1db084897a0517369d8c70726ca068640781b3c307c8d6f0",
-   "en_source": "deepl",
    "created_at": "2026-11-04T18:42:59.391Z"
   },
   {
@@ -53,7 +64,6 @@
    "title_en": "Cutting-Edge Retro Programmers",
    "body_en": "I’m a computer science student, so why start a blog? Because I want to do something retro. Blogs used to be all the rage, but as technology moved on, they have turned into a kind of “archaeological” website. I often browse blogs other people made years ago, and it feels like digging for treasure: you get to watch the fresh, inventive blogs that young people built back then slowly grow old.\n\nWebmasters, too, had their professional heyday as the times changed, only to be suddenly hit by AI. AI is a technological revolution aimed squarely at replacing programmers, much like textile machines replaced seamstresses and trains put coachmen out of work.\n\nI always assumed industrialization and higher efficiency were good things. Only now do I appreciate the joy of making things by hand. In that era, most textile workers did the job to earn a living, but some of them probably truly enjoyed the craft of weaving. Industrialization gives society more widely available products (mass-produced standard clothing, public trains, and ever-simpler programming).\n\nBut people who find joy in the process still exist. Weaving or riding horses no longer earns anyone much money these days, yet both live on as hobbies. I just feel sorry for those who rushed into computer science purely for the high pay. All in all, I enjoy programming for its own sake, so let me be a cutting-edge retro guy :)",
    "en_hash": "58beff368dfc3f158d909839f8eeb365016aae278896fbaab503bb44271619af",
-   "en_source": "deepl+proofread",
    "created_at": "2026-11-05T05:18:36.174Z"
   },
   {
@@ -66,99 +76,165 @@
    "title_en": "The AI Revolution May Survive. Will Tech Stocks?",
    "body_en": "Besides programming, I also invest in stocks. A string of big events has landed recently: the midterm elections, the Fed’s rate hike, and Anthropic’s IPO. Personally, I love technology and favor tech companies, which I also understand better. But not everyone welcomes technological progress. Technological progress is cool in itself; what worries people is the blow it deals to every industry along the way. Trump’s way of “Making America Great Again” seems to rest on leadership in business, but the Democrats clearly don’t see it that way.\n\nThe Democrats won a sweeping victory in the midterms. Add the Fed’s new framework (let the market regulate itself, no bailouts, no guidance), and this technological revolution is more chaotic than any before it. Anthropic’s current situation clearly can’t support the valuation it wants. Could it have a secret weapon in-house? (Though that would also step on a Democratic landmine.)\n\nWith so many factors piling up, tech stocks don’t look set for an easy ride. Together they could well trigger a panic sell-off, but will this be the AI bubble bursting? I don’t think it’s time yet. The crash that truly marks the bursting of the AI bubble will surely be far more brutal than this one.",
    "en_hash": "2e968981638a498167af940877d45a112cbf26e2d245848695dbffa0ac354e88",
-   "en_source": "deepl+proofread",
    "created_at": "2026-11-05T17:35:50.094Z"
+  },
+  {
+   "id": "v_20261106_df022f1504fc",
+   "article_id": "a_20261106_11d6d7946bfb",
+   "version_no": 1,
+   "title_zh": "搬家好累呀",
+   "body_zh": "搬家好累呀，有没有懂的。搬家最累人的反而不是将打包的箱子搬出去。而是将零散，细碎的物品整理一起。不累，但真的很折磨人，如同一种精神消耗",
+   "zh_hash": "ad1df0606a80bbfe60c2aebc94d1a9c909d73e497f9828c398d01d97c8616f0e",
+   "title_en": "Moving is so tiring.",
+   "body_en": "Moving is so exhausting. Does anyone else feel this way? The most tiring part of moving isn’t actually carrying the packed boxes out. It’s sorting all the loose, small items together. It isn’t physically tiring, but it’s really torturous, like a kind of mental drain.",
+   "en_hash": "7320e60ac7e97c0cfdacc5767602bdc80db46c80ecfdb3383c957e8ac68a4379",
+   "created_at": "2026-11-06T17:24:02.186Z"
+  },
+  {
+   "id": "v_20261108_0e5fc8cd2acc",
+   "article_id": "a_20261108_99c7ab9d22cf",
+   "version_no": 1,
+   "title_zh": "Java的思考与感受",
+   "body_zh": "刚考完Java期中考。说点我对Java的看法。相比起c，它封装了很多东西。简化了很多边界判断和硬件管理。但这样的坏处是在学完c之后感到很没用安全感，以及很多现成的可以通过直接调用的方法。这造成我可以在没读过源码，不知道底层如何实现的情况下，仍然可以通过学习它的语法和功能调用。这对开发效率确实有很大提升。再说它的面向对象的设计，Java从上到下都围绕着这种新的模式，给编程提供了一种新的思维方式。但它就像是一个专为一个这一主旨而构造。导致其函数名称是否冗长，大部分函数就像是一个路径名称。而Python就很好地兼顾了这些。再者我只是初学者，这些是我目前的一些看法，在面向对象设计的同时Java也解决了在不同设备上的同样可以运行的问题。所以大家是什么想法？",
+   "zh_hash": "ce1a285923c16eb5349d1212576576481d930e93dc01a17a00893bbe8eda8ba7",
+   "title_en": "Thoughts and Reflections on Java",
+   "body_en": "I just finished my Java midterm. Here are some of my thoughts on Java. Compared to C, it encapsulates a lot of things and simplifies many boundary checks and memory management. The downside is that after learning C, I feel less secure, and there are many ready-made methods that can be called directly. This means I can use it just by learning its syntax and function calls, without having read the source code or knowing how the underlying implementation works. That really does boost development efficiency.\n\nAs for its object-oriented design, Java is built around this paradigm from top to bottom, offering a new way of thinking about programming. But it feels as though it were built for this one purpose alone. As a result, function names are verbose, and most of them read like path names. Python, on the other hand, balances these aspects well.\n\nAlso, I'm only a beginner, and these are just my current views. Besides its object-oriented design, Java also solves the problem of running the same program on different devices. So what do you think?",
+   "en_hash": "576d85a04f9bd011bd7303b499b6d54b9de03da244239b7dfd8b219692d163b8",
+   "created_at": "2026-11-08T04:32:47.007Z"
   }
  ],
  "publish_jobs": [
   {
    "article_id": "a_20261104_04e296cb1c3b",
    "platform": "blog",
-   "status": "done",
-   "stage": "verified",
    "public_urls": "[\"https://staging.personal-bilingual-blog.pages.dev/zh/posts/2026-11-04-test-draft-first-end-to-end-test/\",\"https://staging.personal-bilingual-blog.pages.dev/en/posts/2026-11-04-test-draft-first-end-to-end-test/\"]",
    "updated_at": "2026-11-04T23:17:19.375Z"
   },
   {
    "article_id": "a_20261105_9487951b59db",
    "platform": "blog",
-   "status": "done",
-   "stage": "verified",
    "public_urls": "[\"https://personal-bilingual-blog.pages.dev/zh/posts/2026-11-05-cutting-edge-retro-programmers/\",\"https://personal-bilingual-blog.pages.dev/en/posts/2026-11-05-cutting-edge-retro-programmers/\"]",
    "updated_at": "2026-11-05T05:21:20.175Z"
   },
   {
    "article_id": "a_20261105_9487951b59db",
    "platform": "bluesky",
-   "status": "done",
-   "stage": "verified",
    "public_urls": "[\"https://bsky.app/profile/yanzhou05.bsky.social/post/3mzljxnimyz2q\"]",
    "updated_at": "2026-11-05T18:51:20.299Z"
   },
   {
    "article_id": "a_20261105_9487951b59db",
    "platform": "devto",
-   "status": "done",
-   "stage": "verified",
    "public_urls": "[\"https://dev.to/inkward/cutting-edge-retro-programmers-28nf\"]",
    "updated_at": "2026-11-05T19:04:20.555Z"
   },
   {
    "article_id": "a_20261105_9487951b59db",
    "platform": "telegram",
-   "status": "done",
-   "stage": "verified",
    "public_urls": "[\"https://t.me/inkward_zh/6\"]",
    "updated_at": "2026-11-05T16:31:39.341Z"
   },
   {
    "article_id": "a_20261105_9487951b59db",
    "platform": "telegram_en",
-   "status": "done",
-   "stage": "verified",
    "public_urls": "[\"https://t.me/inkward_en/2\"]",
    "updated_at": "2026-11-05T16:46:34.036Z"
   },
   {
    "article_id": "a_20261105_97e40a9e8b65",
    "platform": "blog",
-   "status": "done",
-   "stage": "verified",
    "public_urls": "[\"https://personal-bilingual-blog.pages.dev/zh/posts/2026-11-05-the-ai-revolution-may-survive-will-tech-stocks/\",\"https://personal-bilingual-blog.pages.dev/en/posts/2026-11-05-the-ai-revolution-may-survive-will-tech-stocks/\"]",
    "updated_at": "2026-11-05T18:22:20.272Z"
   },
   {
    "article_id": "a_20261105_97e40a9e8b65",
    "platform": "bluesky",
-   "status": "done",
-   "stage": "verified",
    "public_urls": "[\"https://bsky.app/profile/yanzhou05.bsky.social/post/3mzljxpbndi2z\"]",
    "updated_at": "2026-11-05T18:51:22.624Z"
   },
   {
    "article_id": "a_20261105_97e40a9e8b65",
-   "platform": "devto",
-   "status": "cancelled",
-   "stage": "queued",
-   "public_urls": null,
-   "updated_at": "2026-11-05T17:35:59.151Z"
-  },
-  {
-   "article_id": "a_20261105_97e40a9e8b65",
    "platform": "telegram",
-   "status": "done",
-   "stage": "verified",
    "public_urls": "[\"https://t.me/inkward_zh/8\"]",
    "updated_at": "2026-11-05T18:22:26.902Z"
   },
   {
    "article_id": "a_20261105_97e40a9e8b65",
    "platform": "telegram_en",
-   "status": "done",
-   "stage": "verified",
    "public_urls": "[\"https://t.me/inkward_en/4\"]",
    "updated_at": "2026-11-05T18:22:29.321Z"
+  },
+  {
+   "article_id": "a_20261106_11d6d7946bfb",
+   "platform": "blog",
+   "public_urls": "[\"https://personal-bilingual-blog.pages.dev/zh/posts/2026-11-06-moving-is-so-tiring/\",\"https://personal-bilingual-blog.pages.dev/en/posts/2026-11-06-moving-is-so-tiring/\"]",
+   "updated_at": "2026-11-06T23:17:20.250Z"
+  },
+  {
+   "article_id": "a_20261106_11d6d7946bfb",
+   "platform": "bluesky",
+   "public_urls": "[\"https://bsky.app/profile/yanzhou05.bsky.social/post/3mzo7vuugycqq\"]",
+   "updated_at": "2026-11-06T20:30:21.659Z"
+  },
+  {
+   "article_id": "a_20261106_11d6d7946bfb",
+   "platform": "bluesky",
+   "public_urls": "[\"https://bsky.app/profile/yanzhou05.bsky.social/post/3mzo7vuugycqq\"]",
+   "updated_at": "2026-11-06T23:17:22.647Z"
+  },
+  {
+   "article_id": "a_20261106_11d6d7946bfb",
+   "platform": "telegram",
+   "public_urls": "[\"https://t.me/inkward_zh/9\"]",
+   "updated_at": "2026-11-06T20:30:24.880Z"
+  },
+  {
+   "article_id": "a_20261106_11d6d7946bfb",
+   "platform": "telegram",
+   "public_urls": "[\"https://t.me/inkward_zh/9\"]",
+   "updated_at": "2026-11-06T23:17:24.862Z"
+  },
+  {
+   "article_id": "a_20261106_11d6d7946bfb",
+   "platform": "telegram_en",
+   "public_urls": "[\"https://t.me/inkward_en/5\"]",
+   "updated_at": "2026-11-06T20:30:28.029Z"
+  },
+  {
+   "article_id": "a_20261106_11d6d7946bfb",
+   "platform": "telegram_en",
+   "public_urls": "[\"https://t.me/inkward_en/5\"]",
+   "updated_at": "2026-11-06T23:17:27.052Z"
+  },
+  {
+   "article_id": "a_20261108_99c7ab9d22cf",
+   "platform": "blog",
+   "public_urls": "[\"https://personal-bilingual-blog.pages.dev/zh/posts/2026-11-08-thoughts-and-reflections-on-java/\",\"https://personal-bilingual-blog.pages.dev/en/posts/2026-11-08-thoughts-and-reflections-on-java/\"]",
+   "updated_at": "2026-11-08T20:42:19.583Z"
+  },
+  {
+   "article_id": "a_20261108_99c7ab9d22cf",
+   "platform": "bluesky",
+   "public_urls": "[\"https://bsky.app/profile/yanzhou05.bsky.social/post/3mztbeo6qxcgj\"]",
+   "updated_at": "2026-11-08T20:42:24.394Z"
+  },
+  {
+   "article_id": "a_20261108_99c7ab9d22cf",
+   "platform": "devto",
+   "public_urls": "[\"https://dev.to/inkward/thoughts-and-reflections-on-java-1lbd\"]",
+   "updated_at": "2026-11-08T20:42:25.736Z"
+  },
+  {
+   "article_id": "a_20261108_99c7ab9d22cf",
+   "platform": "telegram",
+   "public_urls": "[\"https://t.me/inkward_zh/10\"]",
+   "updated_at": "2026-11-08T20:43:20.471Z"
+  },
+  {
+   "article_id": "a_20261108_99c7ab9d22cf",
+   "platform": "telegram_en",
+   "public_urls": "[\"https://t.me/inkward_en/6\"]",
+   "updated_at": "2026-11-08T20:42:21.570Z"
   }
- ],
- "glossary": []
+ ]
 }
