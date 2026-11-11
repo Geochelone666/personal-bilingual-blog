@@ -18,9 +18,9 @@ const label = (p: CollectionEntry<"posts">) => (p.data.kind === "quick" ? excerp
 <Base lang={lang} title={d.title} versionHash={d.versionHash} alternate={`/${other}/posts/${d.postSlug}/`} path={`/${lang}/posts/${d.postSlug}/`} description={excerpt(post.body)} article={{ published: d.date, modified: d.updated }} image={d.cover ?? `/og/${lang}/${d.postSlug}.png`}>
   <article class="post" data-pagefind-body>
     <header>
-      <div class="meta">
+      <div class="meta" data-pagefind-ignore>
         <time datetime={isoDay(d.date)}>{fmtDate(d.date, lang)}</time>
-        {quick ? <span class="tag">{t.quick}</span> : d.category && <span class="tag" data-pagefind-filter="category">{CAT[lang][d.category] ?? d.category}</span>}
+        {quick ? <span class="tag">{t.quick}</span> : d.category && <span class="tag">{CAT[lang][d.category] ?? d.category}</span>}
         {!quick && <span>{readMins(post.body, lang)} {t.min}{lang === "zh" ? t.read : ` ${t.read}`}</span>}
         {d.updated && <span>{t.updated} {fmtDate(d.updated, lang)}</span>}
         {t.translated && <span>{t.translated}</span>}

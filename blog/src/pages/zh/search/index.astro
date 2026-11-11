@@ -8,7 +8,7 @@ import Base from "../../../layouts/Base.astro";
   <script is:inline src="/pagefind/pagefind-ui.js"></script>
   <script is:inline>
     window.addEventListener("DOMContentLoaded", () => {
-      new PagefindUI({ element: "#search", showSubResults: true, showImages: false, translations: { placeholder: "搜索文章…", zero_results: "没有找到" } });
+      new PagefindUI({ element: "#search", showSubResults: true, showImages: false, showEmptyFilters: false, resetStyles: false, translations: { placeholder: "搜索文章…", zero_results: "没有找到" } });
     });
   </script>
 </Base>
