@@ -1,14 +1,4 @@
 ---
-import Base from "../../layouts/Base.astro";
-import { getCollection } from "astro:content";
-const lang = "en";
-const posts = (await getCollection("posts", (p) => p.data.lang === lang)).sort((a, b) => +b.data.date - +a.data.date);
+import PostIndex from "../../components/PostIndex.astro";
 ---
-<Base lang={lang}>
-  {posts.length === 0 && <p>{lang === "zh" ? "还没有文章。" : "No posts yet."}</p>}
-  <ul class="posts">
-    {posts.map((p) => (
-      <li><a href={`/${lang}/posts/${p.data.postSlug}/`}>{p.data.title}</a> <span class="meta">{p.data.kind === "quick" && (lang === "zh" ? "短想法 · " : "Note · ")}{p.data.date.toISOString().slice(0, 10)}</span></li>
-    ))}
-  </ul>
-</Base>
+<PostIndex lang="en" />

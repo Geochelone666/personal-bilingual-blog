@@ -1,0 +1,39 @@
+---
+import Base from "../layouts/Base.astro";
+import { getCollection, render, type CollectionEntry } from "astro:content";
+import { CAT, UI, fmtDate, isoDay, readMins, excerpt, type Lang } from "../site.config";
+interface Props { lang: Lang; post: CollectionEntry<"posts"> }
+const { lang, post } = Astro.props;
+const { Content } = await render(post);
+const t = UI[lang];
+const other = lang === "zh" ? "en" : "zh";
+const d = post.data;
+const quick = d.kind === "quick";
+const all = (await getCollection("posts", (p) => p.data.lang === lang)).sort((a, b) => +b.data.date - +a.data.date);
+const i = all.findIndex((p) => p.data.postSlug === d.postSlug);
+const newer = i > 0 ? all[i - 1] : undefined;
+const older = i >= 0 && i < all.length - 1 ? all[i + 1] : undefined;
+const label = (p: CollectionEntry<"posts">) => (p.data.kind === "quick" ? excerpt(p.body, 28) : p.data.title);
+---
+<Base lang={lang} title={d.title} versionHash={d.versionHash} alternate={`/${other}/posts/${d.postSlug}/`} path={`/${lang}/posts/${d.postSlug}/`} description={excerpt(post.body)} article={{ published: d.date, modified: d.updated }} image={d.cover ?? `/og/${lang}/${d.postSlug}.png`}>
+  <article class="post" data-pagefind-body>
+    <header>
+      <div class="meta">
+        <time datetime={isoDay(d.date)}>{fmtDate(d.date, lang)}</time>
+        {quick ? <span class="tag">{t.quick}</span> : d.category && <span class="tag" data-pagefind-filter="category">{CAT[lang][d.category] ?? d.category}</span>}
+        {!quick && <span>{readMins(post.body, lang)} {t.min}{lang === "zh" ? t.read : ` ${t.read}`}</span>}
+        {d.updated && <span>{t.updated} {fmtDate(d.updated, lang)}</span>}
+        {t.translated && <span>{t.translated}</span>}
+      </div>
+      <h1>{d.title}</h1>
+    </header>
+    <div class="prose"><Content /></div>
+  </article>
+  {(older || newer) && (
+    <nav class="endnav" aria-label={lang === "zh" ? "更多文章" : "More posts"}>
+      {older && <a href={`/${lang}/posts/${older.data.postSlug}/`}><small>{t.prev}</small>{label(older)}</a>}
+      {newer && <a class="next" href={`/${lang}/posts/${newer.data.postSlug}/`}><small>{t.next}</small>{label(newer)}</a>}
+    </nav>
+  )}
+  <a class="back" href={`/${lang}/`}>{t.back}</a>
+</Base>

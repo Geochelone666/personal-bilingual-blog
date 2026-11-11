@@ -1,0 +1,52 @@
+---
+import Base from "../layouts/Base.astro";
+import { getCollection } from "astro:content";
+import { SITE, CAT, UI, fmtDate, isoDay, readMins, excerpt, type Lang } from "../site.config";
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+const t = UI[lang];
+const posts = (await getCollection("posts", (p) => p.data.lang === lang)).sort((a, b) => +b.data.date - +a.data.date);
+const cats = [...new Set(posts.map((p) => p.data.category).filter((c): c is string => !!c))];
+---
+<Base lang={lang}>
+  <section class="intro">
+    <h1>{SITE.name[lang]}</h1>
+    <p>{SITE.description[lang]}</p>
+  </section>
+  {cats.length > 1 && (
+    <ul class="chips" id="chips">
+      <li><button type="button" data-c="" aria-pressed="true">{t.all}</button></li>
+      {cats.map((c) => <li><button type="button" data-c={c} aria-pressed="false">{CAT[lang][c] ?? c}</button></li>)}
+    </ul>
+  )}
+  {posts.length === 0 && <p>{t.none}</p>}
+  <ul class="posts" id="posts">
+    {posts.map((p) => {
+      const quick = p.data.kind === "quick";
+      return (
+        <li class={quick ? "quick" : undefined} data-c={p.data.category ?? ""}>
+          <a class="row" href={`/${lang}/posts/${p.data.postSlug}/`}>
+            <div class="meta">
+              <time datetime={isoDay(p.data.date)}>{fmtDate(p.data.date, lang)}</time>
+              {quick ? <span class="tag">{t.quick}</span> : p.data.category && <span class="tag">{CAT[lang][p.data.category] ?? p.data.category}</span>}
+              {!quick && <span>{readMins(p.body, lang)} {t.min}</span>}
+            </div>
+            {!quick && <h2>{p.data.title}</h2>}
+            <p class="ex">{excerpt(p.body, quick ? 220 : 110)}</p>
+          </a>
+        </li>
+      );
+    })}
+  </ul>
+  <script is:inline>
+    (function () {
+      var chips = document.getElementById("chips"); if (!chips) return;
+      chips.addEventListener("click", function (e) {
+        var b = e.target.closest("button"); if (!b) return;
+        var c = b.getAttribute("data-c");
+        chips.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+        document.querySelectorAll("#posts > li").forEach(function (li) { li.hidden = !!c && li.getAttribute("data-c") !== c; });
+      });
+    })();
+  </script>
+</Base>
