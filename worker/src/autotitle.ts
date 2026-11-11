@@ -24,7 +24,8 @@ export function heuristicTitle(text: string): string {
   return chars.length > 16 ? chars.slice(0, 16).join("") + "…" : chars.join("") || "随笔";
 }
 
-const MODELS = ["@cf/qwen/qwen3-30b-a3b-fp8", "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/meta/llama-3.1-8b-instruct-fast"];
+// qwen3-30b is retired by Workers AI on 2026-11-20.
+const MODELS = ["@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/meta/llama-3.1-8b-instruct-fast"];
 
 function clean(raw: string): string | null {
   let s = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim().split("\n").map((x) => x.trim()).filter(Boolean)[0] ?? "";
