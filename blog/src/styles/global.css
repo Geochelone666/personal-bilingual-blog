@@ -73,3 +73,25 @@ article.post h1 { font-family: var(--serif); font-size: clamp(28px, 6vw, 38px); 
 /* Search (Pagefind UI) follows the site palette */
 #search { --pagefind-ui-primary: var(--accent); --pagefind-ui-text: var(--fg); --pagefind-ui-background: var(--card); --pagefind-ui-border: var(--line); --pagefind-ui-tag: var(--accent-soft); --pagefind-ui-border-radius: 10px; --pagefind-ui-font: var(--sans); margin-top: 8px; }
 main > h1 { font-family: var(--serif); font-size: 30px; margin: 18px 0 20px; }
+
+/* comments */
+.comments { margin-top: 56px; padding-top: 28px; border-top: 1px solid var(--line); }
+.comments h2 { font-family: var(--serif); font-size: 20px; margin: 0 0 16px; }
+.comments h2 .count { color: var(--muted); font-family: var(--sans); font-size: 14px; font-weight: 400; }
+.clist { list-style: none; margin: 0; padding: 0; }
+.clist li { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.clist p { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; font-size: 15px; }
+.cmeta { display: flex; gap: 10px; align-items: baseline; font-size: 13px; }
+.cmeta time { color: var(--muted); }
+.cempty { color: var(--muted); font-size: 14px; }
+.cform { display: grid; gap: 10px; margin-top: 18px; }
+.cform input, .cform textarea { font: inherit; font-size: 15px; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; width: 100%; box-sizing: border-box; }
+.cform input[name=name] { max-width: 240px; }
+.cform textarea { resize: vertical; min-height: 84px; }
+.cform input:focus, .cform textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.cform .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.crow { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.cmsg { color: var(--muted); font-size: 13px; }
+.cform button { font: inherit; font-size: 14px; background: var(--accent); color: #fff; border: 0; border-radius: 999px; padding: 8px 20px; cursor: pointer; }
+.cform button:disabled { opacity: .6; cursor: default; }
+@media print { .comments { display: none; } }
