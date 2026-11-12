@@ -1,5 +1,6 @@
 ---
 import Base from "../layouts/Base.astro";
+import Comments from "./Comments.astro";
 import { getCollection, render, type CollectionEntry } from "astro:content";
 import { CAT, UI, fmtDate, isoDay, readMins, excerpt, type Lang } from "../site.config";
 interface Props { lang: Lang; post: CollectionEntry<"posts"> }
@@ -29,6 +30,7 @@ const label = (p: CollectionEntry<"posts">) => (p.data.kind === "quick" ? excerp
     </header>
     <div class="prose"><Content /></div>
   </article>
+  <Comments lang={lang} slug={d.postSlug} />
   {(older || newer) && (
     <nav class="endnav" aria-label={lang === "zh" ? "更多文章" : "More posts"}>
       {older && <a href={`/${lang}/posts/${older.data.postSlug}/`}><small>{t.prev}</small>{label(older)}</a>}

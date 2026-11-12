@@ -10,6 +10,7 @@ import { reconcile } from "./reconcile";
 import { once } from "./p3";
 import { sha256Bytes } from "./service";
 import { enabledPlatforms } from "./platforms";
+import { handleComments, deleteComment } from "./comments";
 
 const HELP = `个人双语博客 · 写作 Bot
 
@@ -43,6 +44,7 @@ export default {
       if (req.method === "POST" && url.pathname === "/telegram/webhook") return await webhook(req, env, ctx);
       if (req.method === "GET" && url.pathname.startsWith("/preview/")) return await preview(url, env);
       if (url.pathname === "/hit" && (req.method === "POST" || req.method === "GET")) return await recordHit(env, url, req);
+      if (url.pathname === "/comments") return await handleComments(req, url, env);
       if (url.pathname.startsWith("/admin/")) return await admin(req, url, env);
       if (url.pathname === "/") return new Response("ok", { headers: { "X-Robots-Tag": "noindex" } });
       return new Response("not found", { status: 404 });
@@ -425,6 +427,7 @@ async function admin(req: Request, url: URL, env: Env): Promise<Response> {
 
   if (url.pathname === "/admin/backup-preview") return new Response(await buildBackup(env), { headers: { "Content-Type": "application/json" } });
   if (url.pathname === "/admin/reconcile") return json(await reconcile(env));
+  if (url.pathname === "/admin/comment-delete" && req.method === "POST") return json({ deleted: await deleteComment(env, Number(url.searchParams.get("id"))) });
   if (url.pathname === "/admin/issues") return json({ issues: await svc.health(), heartbeat: (await env.DB.prepare("SELECT at FROM periodic_runs WHERE name='heartbeat'").first<any>())?.at ?? null });
   if (url.pathname === "/admin/health") {
     const out: Record<string, unknown> = {};

@@ -11,6 +11,8 @@ export const IS_PRODUCTION = (process.env.CF_PAGES_BRANCH ?? "main") === "main";
 export const SITE_URL = (process.env.SITE_URL || "https://personal-bilingual-blog.pages.dev").replace(/\/$/, "");
 // Privacy-friendly page-view counter on the publishing Worker (no cookies, no IP stored).
 export const HIT_URL = "https://pbb-writer.geochelone666.workers.dev/hit";
+// Reader comments: no account, optional nickname, no approval (user 2026-11-11).
+export const COMMENTS_URL = "https://pbb-writer.geochelone666.workers.dev/comments";
 /** Plain-text excerpt of a markdown body. */
 export function excerpt(md: string | undefined, n = 150): string {
   const t = (md ?? "").replace(/```[\s\S]*?```/g, " ").replace(/!\[[^\]]*\]\([^)]*\)/g, " ").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[#>*_`~-]+/g, " ").replace(/\s+/g, " ").trim();

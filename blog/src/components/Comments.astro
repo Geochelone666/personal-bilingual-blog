@@ -1,0 +1,62 @@
+---
+import { COMMENTS_URL, type Lang } from "../site.config";
+interface Props { lang: Lang; slug: string }
+const { lang, slug } = Astro.props;
+const zh = lang === "zh";
+const T = zh
+  ? { h: "评论", name: "昵称（可不填）", body: "说点什么…", send: "发表", sending: "发送中…", anon: "匿名", none: "还没有评论，来说第一句吧。", fail: "加载失败，稍后刷新试试。", err: "没发出去，请稍后再试。", slow: "发得太快了，歇一会儿再来。", dup: "这条已经发过了。", empty: "写点内容再发。" }
+  : { h: "Comments", name: "Name (optional)", body: "Say something…", send: "Post", sending: "Posting…", anon: "Anonymous", none: "No comments yet. Be the first.", fail: "Couldn't load comments. Try refreshing later.", err: "Couldn't post. Please try again.", slow: "Too fast. Wait a moment and try again.", dup: "You already posted that.", empty: "Write something first." };
+---
+<section class="comments" id="comments" data-pagefind-ignore aria-labelledby="comments-h" data-url={COMMENTS_URL} data-slug={slug} data-lang={lang} data-t={JSON.stringify(T)}>
+  <h2 id="comments-h">{T.h} <span class="count"></span></h2>
+  <ol class="clist" aria-live="polite"></ol>
+  <p class="cempty" hidden>{T.none}</p>
+  <form class="cform">
+    <input name="name" maxlength="30" autocomplete="nickname" placeholder={T.name} aria-label={T.name} />
+    <textarea name="body" maxlength="1000" rows="3" required placeholder={T.body} aria-label={T.body}></textarea>
+    <input name="website" tabindex="-1" autocomplete="off" class="hp" aria-hidden="true" />
+    <div class="crow"><span class="cmsg" role="status"></span><button type="submit">{T.send}</button></div>
+  </form>
+</section>
+<script is:inline>
+(function () {
+  var el = document.getElementById("comments"); if (!el) return;
+  var api = el.dataset.url, slug = el.dataset.slug, lang = el.dataset.lang, T = JSON.parse(el.dataset.t);
+  var list = el.querySelector(".clist"), empty = el.querySelector(".cempty"), count = el.querySelector(".count");
+  var form = el.querySelector(".cform"), msg = el.querySelector(".cmsg"), btn = form.querySelector("button");
+  var fmt = function (iso) {
+    try { return new Date(iso).toLocaleString(lang === "zh" ? "zh-CN" : "en-CA", { timeZone: "America/Toronto", year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; }
+  };
+  var n = 0;
+  function add(c) {
+    var li = document.createElement("li");
+    var meta = document.createElement("div"); meta.className = "cmeta";
+    var b = document.createElement("b"); b.textContent = c.name || T.anon;
+    var t = document.createElement("time"); t.dateTime = c.created_at; t.textContent = fmt(c.created_at);
+    meta.append(b, t);
+    var p = document.createElement("p"); p.textContent = c.body;
+    li.append(meta, p); list.append(li);
+    n++; count.textContent = String(n); empty.hidden = true;
+  }
+  try { form.name.value = localStorage.getItem("pbb:name") || ""; } catch (e) {}
+  fetch(api + "?s=" + encodeURIComponent(slug)).then(function (r) { if (!r.ok) throw 0; return r.json(); })
+    .then(function (j) { (j.comments || []).forEach(add); if (!n) empty.hidden = false; })
+    .catch(function () { empty.hidden = false; empty.textContent = T.fail; });
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var body = form.body.value.trim(), name = form.name.value.trim();
+    if (!body) { msg.textContent = T.empty; return; }
+    btn.disabled = true; msg.textContent = T.sending;
+    try { localStorage.setItem("pbb:name", name); } catch (e) {}
+    fetch(api, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ s: slug, name: name, body: body, website: form.website.value }) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j }; }); })
+      .then(function (x) {
+        if (x.s === 201 && x.j.comment) { add(x.j.comment); form.body.value = ""; msg.textContent = ""; }
+        else if (x.s === 200) { form.body.value = ""; msg.textContent = ""; }
+        else msg.textContent = x.s === 429 ? T.slow : x.s === 409 ? T.dup : T.err;
+      })
+      .catch(function () { msg.textContent = T.err; })
+      .finally(function () { btn.disabled = false; });
+  });
+})();
+</script>
