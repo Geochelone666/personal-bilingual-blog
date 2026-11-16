@@ -226,6 +226,12 @@
   },
   {
    "article_id": "a_20261108_99c7ab9d22cf",
+   "platform": "medium",
+   "public_urls": "[\"https://medium.com/@inkward/thoughts-and-reflections-on-java-3f8fac5e4924\"]",
+   "updated_at": "2026-11-11T06:01:25Z"
+  },
+  {
+   "article_id": "a_20261108_99c7ab9d22cf",
    "platform": "telegram",
    "public_urls": "[\"https://t.me/inkward_zh/10\"]",
    "updated_at": "2026-11-08T20:43:20.471Z"
